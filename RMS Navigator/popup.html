@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>RMS Navigator v1.52</title>
+  <style>
+    body {
+      margin: 10px;
+      font-family: Arial, sans-serif;
+      min-width: 280px;
+    }
+    h3 {
+      margin: 0;
+      font-size: 16px;
+      text-align: center;
+    }
+    .subtitle {
+      margin: 5px 0 15px;
+      font-size: 14px;
+      text-align: center;
+      color: #333;
+    }
+    .subtitle ul {
+      list-style: disc inside;
+      padding: 0;
+      margin: 5px 0;
+    }
+    .subtitle li {
+      margin: 2px 0;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    .subdomain-wrapper {
+      display: flex;
+      align-items: center;
+      margin-top: 5px;
+    }
+    .subdomain-wrapper input {
+      flex: 0 0 150px; /* increased width */
+      margin-right: 5px;
+      padding: 4px;
+      box-sizing: border-box;
+    }
+    .domain-suffix {
+      flex: 1;
+      font-size: 14px;
+      color: #555;
+      white-space: nowrap;
+    }
+    input[type="password"],
+    input[type="text"] {
+      margin-top: 5px;
+      padding: 4px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .module-toggle {
+      margin-top: 8px;
+      font-weight: normal;
+    }
+    button {
+      margin-top: 15px;
+      padding: 8px 16px;
+      font-size: 14px;
+      background-color: #007BFF;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .donation-section {
+  text-align: center;
+  padding: 15px;
+  font-family: Arial, sans-serif;
+}
+
+.donation-section h3 {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+.donation-section p {
+  font-size: 12px;
+  color: #555;
+  margin: 10px 0;
+}
+
+.donate-button {
+  display: inline-block;
+  background-color: #0070ba;
+  color: white;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.donate-button:hover {
+  background-color: #005c9c;
+}
+  </style>
+</head>
+<body>
+  <h3>RMS Navigator v1.52</h3>
+  <div class="subtitle">
+
+  </div>
+
+  <label for="subdomainInput">Company Subdomain:</label>
+  <div class="subdomain-wrapper">
+    <input type="text" id="subdomainInput" placeholder="TestCompany">
+    <span class="domain-suffix">.current-rms.com</span>
+  </div>
+
+  <label for="apiKeyInput">API Key:</label>
+  <input type="password" id="apiKeyInput" placeholder="Enter your API Key">
+
+  <label class="module-toggle">
+    <input type="checkbox" id="enableShortagesCheckbox" checked>
+    Enable Shortages Module
+  </label>
+  <label class="module-toggle">
+    <input type="checkbox" id="enableSuppliersCheckbox" checked>
+    Enable Suppliers Module
+  </label>
+
+  <label class="module-toggle">
+    <input type="checkbox" id="enableMessageBoxCheckbox" checked>
+    Enable Message Box Module
+  </label>
+
+  <label class="module-toggle">
+    <input type="checkbox" id="enableOptionalAccessoriesCheckbox" checked>
+    Enable Optional Accessories Module
+  </label>
+
+  <label class="module-toggle">
+    <input type="checkbox" id="enableHideOrangeLinesCheckbox">
+    Hide “below‐cost” rows
+  </label>
+
+  <button id="saveBtn">Save Settings</button>
+
+  <div class="donation-section">
+    <h4>Support RMS Navigator</h4>
+    <p>RMS Navigator is completely free to use. If you find it helpful and want to support its development, consider making a small donation via PayPal — it’s much appreciated!</p>
+    <a href="https://www.paypal.me/danridd" target="_blank" class="donate-button">
+      ❤️ Donate via PayPal
+    </a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
