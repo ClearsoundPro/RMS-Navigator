@@ -1,7 +1,6 @@
 # RMS-Navigator
 A little nudge for CurrentRMS
 
-
 Download & Save the Files:
 	Download the plugin folder and save it somewhere safe on your computer.
 
