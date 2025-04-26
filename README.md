@@ -40,6 +40,7 @@ _A little nudge for CurrentRMS_
 ## Modules Overview
 
 ### Shortages Module
+<img width="579" alt="Screenshot 2025-04-26 at 12 20 33" src="https://github.com/user-attachments/assets/d741cd95-bddf-41fa-9242-d9feb3507ebf" />
 
 **Location**: Under **Actions** in the Opportunity sidebar, click the **Shortages List** button.  
 
