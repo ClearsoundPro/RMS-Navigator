@@ -12,7 +12,9 @@ _A little nudge for CurrentRMS_
 - **Hotels**  
 - **Volume Calculator**  
 - **LOLER Testing**  
-- **Ladder Testing** 
+- **Ladder Testing**  
+- **Automated Activities**  
+- **Warehouse Dashboard**  
 
 ---
 
