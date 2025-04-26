@@ -1,4 +1,4 @@
-# RMS-Navigator v1.6  
+# RMS-Navigator v1.6.0 
 _A little nudge for CurrentRMS_
 
 ---
