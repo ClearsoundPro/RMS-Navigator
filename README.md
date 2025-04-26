@@ -1,5 +1,18 @@
-# RMS-Navigator v1.6.0 
+# RMS-Navigator v1.6.0  
 _A little nudge for CurrentRMS_
+
+## Current Modules  
+- **Shortages**  
+- **Suppliers**  
+- **Message Box**  
+- **Optional Accessories**  
+- **Hide “below-cost” Rows**  
+
+## Future Modules  
+- **Hotels**  
+- **Volume Calculator**  
+- **LOLER Testing**  
+- **Ladder Testing** 
 
 ---
 
