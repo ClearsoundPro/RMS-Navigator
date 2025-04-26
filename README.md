@@ -74,6 +74,7 @@ _A little nudge for CurrentRMS_
 ---
 
 ### Suppliers Module
+<img width="292" alt="Screenshot 2025-04-26 at 12 16 10" src="https://github.com/user-attachments/assets/1374a5e7-9924-4389-97bf-58877ff4a35f" />
 
 **Location**: On the right-hand side of an Opportunity page, under the **Suppliers** heading.  
 
