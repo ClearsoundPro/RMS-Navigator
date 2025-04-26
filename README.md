@@ -112,6 +112,7 @@ _A little nudge for CurrentRMS_
 ---
 
 ### Message Box Module
+<img width="436" alt="Screenshot 2025-04-26 at 12 12 49" src="https://github.com/user-attachments/assets/3eeafa48-84bf-4715-baef-7d33f51e1593" />
 
 **Location**: Automatically pops up center-stage when an Opportunity description is present.
 
@@ -134,6 +135,7 @@ _A little nudge for CurrentRMS_
 ---
 
 ### Optional Accessories Module
+<img width="591" alt="Screenshot 2025-04-26 at 12 14 38" src="https://github.com/user-attachments/assets/b16bba0b-e0de-4dcd-b5ad-24a15eae7e2c" />
 
 **Location**: Works directly within the item picker on an Opportunity page.  
 
