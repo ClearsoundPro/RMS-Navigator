@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RMS Navigator",
-  "version": "1.52",
+  "version": "1.6",
   "description": "A little nudge for CurrentRMS",
   "permissions": [
     "storage"
@@ -14,7 +14,10 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.current-rms.com/opportunities/*"],
+      "matches": [
+        "https://*.current-rms.com/opportunities/*",
+        "https://*.current-rms.com/purchase_orders/*"
+      ],
       "js": ["content.js"]
     }
   ],

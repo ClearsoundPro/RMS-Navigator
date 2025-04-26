@@ -586,120 +586,434 @@ chrome.storage.sync.get({
   if (enableSuppliers) {
     // inject Suppliers module
 
-    (async () => {
-      const isCostings = window.location.search.includes('view=c');
-      const params     = new URLSearchParams(window.location.search);
-      const supplierIn = params.get('supplier');
-      const basePath   = window.location.pathname.split('?')[0];
-      const baseUrl    = `${window.location.origin}${basePath}`;
-    
-      if (!isCostings) {
-        // 1) Fetch & parse view=c
-        const resp = await fetch(`${baseUrl}?view=c`, { credentials: 'same-origin' });
-        if (!resp.ok) { console.error(`Fetch failed: ${resp.status}`); return; }
-        const html = await resp.text();
-        const doc  = new DOMParser().parseFromString(html, 'text/html');
-    
-        // 2) Scrape supplier → {poText, poHref, badgeClasses}
-        const map = {};
-        doc.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
-          const sup = tr.querySelector('td.optional-01.asset.asset-column')?.textContent.trim();
-          if (!sup ||
-             ['Bulk Stock','Non-Stock Booking','Group Booking'].includes(sup)
-          ) return;
-    
-          const poCell = tr.querySelector('td.optional-04.purchase-order-column');
-          let poText = '', poHref = '', badgeClasses = [];
-          if (poCell) {
-            const badge = poCell.firstElementChild;
-            if (badge) {
-              const a = badge.tagName.toLowerCase() === 'a'
-                        ? badge
-                        : badge.querySelector('a');
-              if (a) {
-                poText = a.textContent.trim();
-                poHref = a.href;
-              }
-              badgeClasses = Array.from(badge.classList);
-            }
-          }
-          if (!map[sup]) map[sup] = { poText, poHref, badgeClasses };
-        });
-    
-        const suppliers = Object.entries(map);
-        if (!suppliers.length) { console.log('ℹ️ No suppliers to show.'); return; }
-    
-        // 3) Ensure “Suppliers” panel exists (after Scheduling)
-        let supDiv = [...document.querySelectorAll('.group-side-content')].find(d =>
-          d.querySelector('h3')?.textContent.trim() === 'Suppliers'
-        );
-        if (!supDiv) {
-          const sched = [...document.querySelectorAll('.group-side-content')].find(d =>
-            d.querySelector('h3')?.textContent.trim() === 'Scheduling'
-          );
-          if (!sched) { console.error('Cannot find Scheduling section'); return; }
-          supDiv = document.createElement('div');
-          supDiv.className = 'group-side-content';
-          supDiv.innerHTML = '<h3>Suppliers</h3>';
-          sched.parentNode.insertBefore(supDiv, sched.nextSibling);
+// SUPLLIERS TAB
+(async () => {
+  const isCostings = window.location.search.includes('view=c');
+  const params     = new URLSearchParams(window.location.search);
+  const supplierIn = params.get('supplier');
+  const basePath   = window.location.pathname.split('?')[0];
+  const baseUrl    = `${window.location.origin}${basePath}`;
+
+  // ── Helper: click “Mark as sent” via hidden iframe, removing data-confirm ──
+  function markPOAsSent(poId) {
+    const search = window.location.search; // preserve ?rp=… etc
+    const src    = `${window.location.origin}/purchase_orders/${poId}${search}`;
+
+    return new Promise((resolve, reject) => {
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1px;height:1px';
+      document.body.appendChild(iframe);
+
+      iframe.onload = () => {
+        try {
+          const win = iframe.contentWindow;
+          const doc = win.document;
+
+          // strip out any data-confirm attributes so Rails UJS won't pop
+          doc.querySelectorAll('[data-confirm]').forEach(el => el.removeAttribute('data-confirm'));
+
+          // now find & click the “mark as sent” link
+          const link = doc.querySelector('a[data-method="post"][href*="/mark_as_sent"]');
+          if (!link) throw new Error('Link not found in PO page');
+          link.click();
+
+          console.log(`✅ PO #${poId} “Mark as sent” clicked.`);
+          cleanup();
+          resolve();
+        } catch (err) {
+          cleanup();
+          reject(err);
         }
-    
-        // 4) Render list
-        supDiv.querySelector('ul.subhire-list')?.remove();
-        const ul = document.createElement('ul');
-        ul.className = 'subhire-list';
-        ul.style.paddingLeft = '1em';
-    
-        suppliers.forEach(([sup, {poText, poHref, badgeClasses}]) => {
-          const li = document.createElement('li');
-          li.textContent = sup + ' — ';
-    
-          const a = document.createElement('a');
-          Object.assign(a.style, {
-            padding:      '2px 6px',
-            borderRadius: '4px',
-            fontSize:     '0.9em',
-            fontWeight:   'bold',
-            marginLeft:   '4px',
-            display:      'inline-block',
-            color:        'white',
-            textDecoration: 'none'
+      };
+
+      iframe.onerror = err => {
+        cleanup();
+        reject(err);
+      };
+
+      function cleanup() {
+        setTimeout(() => iframe.remove(), 200);
+      }
+
+      iframe.src = src;
+    });
+  }
+
+  if (!isCostings) {
+    // 1) Fetch & parse view=c
+    const resp = await fetch(`${baseUrl}?view=c`, { credentials: 'same-origin' });
+    if (!resp.ok) { console.error(`Fetch failed: ${resp.status}`); return; }
+    const html = await resp.text();
+    const doc  = new DOMParser().parseFromString(html, 'text/html');
+
+    // 2) Scrape suppliers → {poText, poHref, badgeClasses}
+    const map = {};
+    doc.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
+      const sup = tr.querySelector('td.optional-01.asset.asset-column')?.textContent.trim();
+      if (!sup ||
+         ['Bulk Stock','Non-Stock Booking','Group Booking','******CLEARSOUND STOCK******',
+          'Dan Ridd','Liam Murphy','Rob Burton','Daniel Gibbs','CA24 BDV PEUGEOT BOXER 3.5T VAN']
+           .includes(sup)
+      ) return;
+
+      const poCell = tr.querySelector('td.optional-04.purchase-order-column');
+      let poText = '', poHref = '', badgeClasses = [];
+      if (poCell) {
+        const badge = poCell.firstElementChild;
+        if (badge) {
+          const a = badge.tagName.toLowerCase() === 'a' ? badge : badge.querySelector('a');
+          if (a) { poText = a.textContent.trim(); poHref = a.href; }
+          badgeClasses = Array.from(badge.classList);
+        }
+      }
+      if (!map[sup]) map[sup] = { poText, poHref, badgeClasses };
+    });
+
+    const suppliers = Object.entries(map);
+    if (!suppliers.length) { console.log('ℹ️ No suppliers to show.'); return; }
+
+    // 3) Ensure “Suppliers” panel exists (after Scheduling)
+    let supDiv = [...document.querySelectorAll('.group-side-content')].find(d =>
+      d.querySelector('h3')?.textContent.trim() === 'Suppliers'
+    );
+    if (!supDiv) {
+      const sched = [...document.querySelectorAll('.group-side-content')].find(d =>
+        d.querySelector('h3')?.textContent.trim() === 'Scheduling'
+      );
+      if (!sched) { console.error('Cannot find Scheduling section'); return; }
+      supDiv = document.createElement('div');
+      supDiv.className = 'group-side-content';
+      supDiv.innerHTML = '<h3>Suppliers</h3>';
+      sched.parentNode.insertBefore(supDiv, sched.nextSibling);
+    }
+
+    // 4) Render list with your colour logic
+    supDiv.querySelector('ul.subhire-list')?.remove();
+    const ul = document.createElement('ul');
+    ul.className = 'subhire-list';
+    ul.style.paddingLeft = '1em';
+
+    suppliers.forEach(([sup, {poText, poHref, badgeClasses}]) => {
+      const li = document.createElement('li');
+      li.textContent = sup + ' — ';
+
+      const a = document.createElement('a');
+      Object.assign(a.style, {
+        padding:        '2px 6px',
+        borderRadius:   '4px',
+        fontSize:       '0.9em',
+        fontWeight:     'bold',
+        marginLeft:     '4px',
+        display:        'inline-block',
+        color:          'white',
+        textDecoration: 'none',
+        cursor:         poText ? 'pointer' : 'default'
+      });
+      a.target = '_blank';
+
+      if (poText) {
+        a.textContent = `PO #${poText}`;
+        a.href        = poHref;
+        // original green → orange; else (blue/black) → green
+        const origIsGreen = badgeClasses.some(c => /success|green/i.test(c));
+        a.style.backgroundColor = origIsGreen ? 'orange' : 'green';
+      } else {
+        a.textContent = 'No PO';
+        a.href        = `${baseUrl}?sort=stock_category&view=c&supplier=${encodeURIComponent(sup)}`;
+        a.style.backgroundColor = 'red';
+      }
+
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+
+    supDiv.appendChild(ul);
+    console.log(`✅ Injected ${suppliers.length} suppliers with updated PO colours.`);
+
+    // ── Right‐click handler to show “Mark as sent” popup ────────────────────
+    document.body.addEventListener('contextmenu', ev => {
+      const link = ev.target.closest('.subhire-list a[href*="/purchase_orders/"]');
+      if (!link || link.textContent.startsWith('No PO')) return;
+      ev.preventDefault();
+
+      // remove old popups
+      document.querySelectorAll('.__po-sent-popup').forEach(x => x.remove());
+
+      // create popup over mouse
+      const box = document.createElement('div');
+      box.className = '__po-sent-popup';
+      box.textContent = 'Mark as sent';
+      Object.assign(box.style, {
+        position:     'absolute',
+        top:          `${ev.pageY}px`,
+        left:         `${ev.pageX}px`,
+        padding:      '6px 12px',
+        background:   '#333',
+        color:        'white',
+        borderRadius: '4px',
+        cursor:       'pointer',
+        zIndex:       9999,
+        fontSize:     '0.9em'
+      });
+      document.body.appendChild(box);
+
+      // cleanup on next click/scroll
+      const cleanup = () => box.remove();
+      setTimeout(() => {
+        document.addEventListener('click', cleanup, { once: true });
+        window.addEventListener('scroll', cleanup, { once: true });
+      }, 10);
+
+      // when clicked, fire the iframe helper
+      box.addEventListener('click', () => {
+        cleanup();
+        const m = link.href.match(/\/purchase_orders\/(\d+)/);
+        if (!m) return console.error('❌ Could not parse PO ID');
+        const poId = m[1];
+        link.style.opacity = '0.6';
+        markPOAsSent(poId)
+          .then(() => link.style.backgroundColor = 'green')
+          .catch(err => console.error(`❌ PO #${poId} failed:`, err))
+          .finally(() => link.style.opacity = '');
+      });
+    });
+
+  } else {
+    // Auto‐select on costings page
+    let count = 0;
+    document.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
+      const name = tr.querySelector('td.optional-01.asset.asset-column')?.textContent.trim();
+      if (name === supplierIn) {
+        const cb = tr.querySelector('input[type="checkbox"]');
+        if (cb && !cb.checked) { cb.click(); count++; }
+      }
+    });
+    console.log(`✔️ Auto‐selected ${count} row${count===1?'':'s'} for “${supplierIn}.”`);
+  }
+})();
+
+
+
+
+
+//Mark PO as Sent
+(async () => {
+  // ── 0) globally disable Rails’ data-confirm on the real “Mark as sent” link ──
+  const realLink = document.querySelector('a[data-method="post"][href*="/mark_as_sent"]');
+  if (realLink) {
+    realLink.removeAttribute('data-confirm');
+    if (window.Rails && typeof window.Rails.confirm === 'function') {
+      window.Rails.confirm = () => true;
+    }
+    window.confirm = () => true;
+  }
+
+  // ── 1) Helper: fully-automate “Mark as sent” by loading the PO in a hidden iframe ──
+  function markPOAsSent(poId) {
+    const search = window.location.search; // preserve any ?rp=…
+    const src    = `${window.location.origin}/purchase_orders/${poId}${search}`;
+    return new Promise((resolve, reject) => {
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1px;height:1px';
+      document.body.appendChild(iframe);
+
+      iframe.onload = () => {
+        try {
+          const win  = iframe.contentWindow;
+          // inside iframe also strip any data-confirm before clicking
+          win.document.querySelectorAll('a[data-confirm]').forEach(el => el.removeAttribute('data-confirm'));
+          win.confirm = () => true;
+          const link = win.document.querySelector('a[data-method="post"][href*="/mark_as_sent"]');
+          if (!link) throw new Error('Link not found in iframe');
+          link.click();
+          console.log(`✅ PO #${poId} “Mark as sent” clicked.`);
+          cleanup();
+          resolve();
+        } catch (err) {
+          cleanup();
+          reject(err);
+        }
+      };
+
+      iframe.onerror = err => {
+        cleanup();
+        reject(err);
+      };
+
+      function cleanup() {
+        setTimeout(() => iframe.remove(), 200);
+      }
+
+      iframe.src = src;
+    });
+  }
+
+  // ── 2) Opportunity page: inject Suppliers list (unchanged colour logic) ──
+  const isCostings = window.location.search.includes('view=c');
+  if (!isCostings) {
+    const basePath = window.location.pathname.split('?')[0];
+    const baseUrl  = `${window.location.origin}${basePath}`;
+    const resp = await fetch(`${baseUrl}?view=c`, { credentials: 'same-origin' });
+    if (resp.ok) {
+      const html = await resp.text();
+      const doc  = new DOMParser().parseFromString(html,'text/html');
+      const map = {};
+      doc.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
+        const sup = tr.querySelector('td.optional-01.asset.asset-column')?.textContent.trim();
+        if (!sup || ['Bulk Stock','Non-Stock Booking','Group Booking','******CLEARSOUND STOCK******',
+                     'Dan Ridd','Liam Murphy','Rob Burton','Daniel Gibbs'].includes(sup)) return;
+        const poCell = tr.querySelector('td.optional-04.purchase-order-column');
+        let poText='', poHref='', badgeClasses=[];
+        if (poCell) {
+          const badge = poCell.firstElementChild;
+          if (badge) {
+            const a = badge.tagName.toLowerCase()==='a'? badge : badge.querySelector('a');
+            if (a) { poText = a.textContent.trim(); poHref = a.href; }
+            badgeClasses = Array.from(badge.classList);
+          }
+        }
+        if (!map[sup]) map[sup] = { poText, poHref, badgeClasses };
+      });
+
+      const suppliers = Object.entries(map);
+      if (suppliers.length) {
+        let supDiv = [...document.querySelectorAll('.group-side-content')]
+                     .find(d=>d.querySelector('h3')?.textContent.trim()==='Suppliers');
+        if (!supDiv) {
+          const sched = [...document.querySelectorAll('.group-side-content')]
+                        .find(d=>d.querySelector('h3')?.textContent.trim()==='Scheduling');
+          if (sched) {
+            supDiv = document.createElement('div');
+            supDiv.className='group-side-content';
+            supDiv.innerHTML='<h3>Suppliers</h3>';
+            sched.parentNode.insertBefore(supDiv,sched.nextSibling);
+          }
+        }
+        if (supDiv) {
+          supDiv.querySelector('ul.subhire-list')?.remove();
+          const ul = document.createElement('ul');
+          ul.className='subhire-list'; ul.style.paddingLeft='1em';
+          suppliers.forEach(([sup,{poText,poHref,badgeClasses}])=>{
+            const li=document.createElement('li');
+            li.textContent = sup+' — ';
+            const a=document.createElement('a');
+            Object.assign(a.style,{padding:'2px 6px',borderRadius:'4px',fontSize:'0.9em',
+              fontWeight:'bold',marginLeft:'4px',display:'inline-block',color:'white',
+              textDecoration:'none',cursor: poText ? 'pointer' : 'default'});
+            a.target='_blank';
+            if (poText) {
+              a.textContent=`PO #${poText}`; a.href=poHref;
+              const origIsGreen = badgeClasses.some(c=>/success|green/i.test(c));
+              a.style.backgroundColor = origIsGreen ? 'orange' : 'green';
+            } else {
+              a.textContent='No PO';
+              a.href=`${baseUrl}?sort=stock_category&view=c&supplier=${encodeURIComponent(sup)}`;
+              a.style.backgroundColor='red';
+            }
+            li.appendChild(a);
+            ul.appendChild(li);
           });
-          a.target = '_blank';
-    
-          if (poText) {
-            // POed: green→orange, blue/black→green
-            a.textContent = `PO #${poText}`;
-            a.href        = poHref;
-            const origIsGreen = badgeClasses.some(c => /success|green/i.test(c));
-            a.style.backgroundColor = origIsGreen ? 'orange' : 'green';
-          } else {
-            // No PO
-            a.textContent = 'No PO';
-            a.href        = `${baseUrl}?sort=stock_category&view=c&supplier=${encodeURIComponent(sup)}`;
-            a.style.backgroundColor = 'red';
-          }
-    
-          li.appendChild(a);
-          ul.appendChild(li);
-        });
-    
-        supDiv.appendChild(ul);
-        console.log(`✅ Injected ${suppliers.length} suppliers with updated PO colors.`);
+          supDiv.appendChild(ul);
+          console.log(`✅ Injected ${suppliers.length} suppliers.`);
+        }
       }
-      else {
-        // Auto-select on costings page
-        let count = 0;
-        document.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
-          const name = tr.querySelector('td.optional-01.asset.asset-column')?.textContent.trim();
-          if (name === supplierIn) {
-            const cb = tr.querySelector('input[type="checkbox"]');
-            if (cb && !cb.checked) { cb.click(); count++; }
-          }
+    }
+  }
+
+  // ── 3) PO detail page: if there are discussions, show centered modal ──
+  const m = window.location.pathname.match(/\/purchase_orders\/(\d+)/);
+  if (!m) return;
+  const poId = m[1];
+
+  // only if the “Mark as sent” action really exists
+  if (!document.querySelector('a[data-method="post"][href*="/mark_as_sent"]')) return;
+
+  // only if there is at least one discussion row
+  if (document.querySelectorAll('.table-responsive.discussions tbody tr').length === 0) return;
+
+  // build full-page overlay
+  const overlay = document.createElement('div');
+  Object.assign(overlay.style,{
+    position:'fixed',top:0,left:0,right:0,bottom:0,
+    backgroundColor:'rgba(0,0,0,0.4)',
+    display:'flex',alignItems:'center',justifyContent:'center',
+    zIndex:10000
+  });
+
+  // modal container
+  const modal = document.createElement('div');
+  Object.assign(modal.style,{
+    background:'#fff',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.2)',
+    width:'320px',maxWidth:'90%',fontFamily:'"Open Sans",Arial,sans-serif',
+    color:'#333',overflow:'hidden'
+  });
+
+  // header
+  const header = document.createElement('div');
+  header.textContent='Discussion Detected';
+  Object.assign(header.style,{
+    backgroundColor:'#f5f5f5',padding:'12px 16px',fontSize:'1.1em',
+    fontWeight:'bold',borderBottom:'1px solid #ddd',textAlign:'center'
+  });
+
+  // body
+  const body = document.createElement('div');
+  body.innerHTML=`<p style="margin:16px;line-height:1.4;text-align:center;">
+                    Mark purchase order as sent?
+                  </p>`;
+
+  // footer with buttons
+  const footer = document.createElement('div');
+  Object.assign(footer.style,{
+    display:'flex',justifyContent:'space-around',
+    padding:'12px',background:'#fafafa',borderTop:'1px solid #ddd'
+  });
+  function makeBtn(txt,bg){
+    const b=document.createElement('button');
+    b.textContent=txt;
+    Object.assign(b.style,{
+      padding:'8px 16px',border:'none',borderRadius:'4px',
+      cursor:'pointer',fontSize:'0.95em',fontWeight:'bold',
+      backgroundColor:bg,color:'#fff'
+    });
+    return b;
+  }
+  const btnYes=makeBtn('Yes, mark sent','#28a745');
+  const btnNo =makeBtn('Cancel','#6c757d');
+  footer.append(btnNo,btnYes);
+
+  modal.append(header,body,footer);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  function closeModal(){ overlay.remove(); }
+
+  btnNo.addEventListener('click',()=>{ closeModal(); });
+  btnYes.addEventListener('click', async () => {
+    closeModal();
+    try {
+      await markPOAsSent(poId);
+      // flash the “Number” field green
+      const dt = [...document.querySelectorAll('.group-side-content dt')]
+                    .find(d => d.textContent.trim() === 'Number');
+      if (dt && dt.nextElementSibling) {
+        Object.assign(dt.nextElementSibling.style, {
+          backgroundColor: '#28a745',
+          color:           '#fff',
+          padding:         '2px 6px',
+          borderRadius:    '4px'
         });
-        console.log(`✔️ Auto-selected ${count} row${count===1?'':'s'} for “${supplierIn}.”`);
       }
-    })();
+      // delay the refresh slightly
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch (err) {
+      console.error('❌ Failed to mark as sent:', err);
+      alert('Failed: ' + err.message);
+    }
+  });
+})();
   }
 
 });
