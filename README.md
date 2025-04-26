@@ -44,7 +44,9 @@ _A little nudge for CurrentRMS_
 
 **Location**: Under **Actions** in the Opportunity sidebar, click the **Shortages List** button.  
 
-> 🔧 **Important:** Set your system’s Availability Period to **Hour** in CurrentRMS System Settings.  
+> 🔧 **Important:**  
+> - Set your system’s Availability Period to **Hour** in CurrentRMS System Settings.  
+> - To save shortage results back into Discussions, create an Opportunity custom field named **SHORTAGES**
 
 **What it does**  
 - Finds items on this Opportunity with stock shortages (per‐job basis).  
@@ -167,6 +169,7 @@ _A little nudge for CurrentRMS_
 ---
 
 ### Hide “below-cost” Rows
+<img width="704" alt="Screenshot 2025-04-26 at 12 24 05" src="https://github.com/user-attachments/assets/93782fd0-1dfc-45fc-84fa-eb16bd2986c7" />
 
 **What it does**  
 - Removes the yellow highlight and hides items priced below cost.  
