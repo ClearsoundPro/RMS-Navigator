@@ -79,8 +79,7 @@ _A little nudge for CurrentRMS_
 **Location**: On the right-hand side of an Opportunity page, under the **Suppliers** heading.  
 
 **What it does**  
-- Lists supplier options for each line-item.  
-- Omits internal/irrelevant names.  
+- Lists suppliers associated with the Opportunity when sub-rent allocations are present.- Omits internal/irrelevant names.  
 - Shows PO status (PO # or **No PO**).  
 - Colour codes:  
   **Red** = No PO  
