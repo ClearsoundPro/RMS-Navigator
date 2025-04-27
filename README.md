@@ -1,4 +1,4 @@
-# RMS-Navigator v1.7.0  
+# RMS-Navigator v1.7.1 
 _A little nudge for CurrentRMS_
 
 ## Current Modules  
