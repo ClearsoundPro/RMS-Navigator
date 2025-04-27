@@ -1,156 +1,169 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>RMS Navigator v1.6.0</title>
+  <meta charset="UTF-8" />
+  <title>RMS Navigator v1.7.0</title>
   <style>
     body {
       margin: 10px;
       font-family: Arial, sans-serif;
-      min-width: 280px;
-    }
-    h3 {
-      margin: 0;
-      font-size: 16px;
-      text-align: center;
-    }
-    .subtitle {
-      margin: 5px 0 15px;
-      font-size: 14px;
-      text-align: center;
+      min-width: 400px;
       color: #333;
     }
-    .subtitle ul {
-      list-style: disc inside;
-      padding: 0;
-      margin: 5px 0;
+    h1, h2 {
+      margin: 0;
+      text-align: center;
     }
-    .subtitle li {
-      margin: 2px 0;
-    }
+    h1 { font-size: 20px; }
+    h2 { font-size: 14px; font-weight: normal; color: #555; margin-bottom: 1em; }
+    a { color: #007BFF; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
     label {
       display: block;
-      margin-top: 10px;
+      margin: 12px 0 4px;
       font-weight: bold;
     }
     .subdomain-wrapper {
       display: flex;
       align-items: center;
-      margin-top: 5px;
     }
     .subdomain-wrapper input {
-      flex: 0 0 150px; /* increased width */
-      margin-right: 5px;
-      padding: 4px;
+      flex: 0 0 180px;
+      padding: 6px;
+      margin-right: 4px;
       box-sizing: border-box;
     }
     .domain-suffix {
-      flex: 1;
       font-size: 14px;
       color: #555;
-      white-space: nowrap;
     }
-    input[type="password"],
-    input[type="text"] {
-      margin-top: 5px;
-      padding: 4px;
+    input[type="text"],
+    input[type="password"] {
       width: 100%;
+      padding: 6px;
       box-sizing: border-box;
-    }
-    .module-toggle {
-      margin-top: 8px;
-      font-weight: normal;
-    }
-    button {
-      margin-top: 15px;
-      padding: 8px 16px;
       font-size: 14px;
+    }
+
+    .module-toggle {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    .module-toggle input {
+      margin-right: 8px;
+    }
+    .clear-cache-btn {
+      margin-left: auto;
+      padding: 4px 8px;
+      font-size: 12px;
+      background: #f5f5f5;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    #saveBtn {
+      width: 100%;
+      padding: 10px;
+      margin-top: 16px;
+      font-size: 15px;
       background-color: #007BFF;
       color: #fff;
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      width: 100%;
-      box-sizing: border-box;
+    }
+    #saveBtn:hover {
+      background-color: #0056b3;
     }
 
     .donation-section {
-  text-align: center;
-  padding: 15px;
-  font-family: Arial, sans-serif;
-}
-
-.donation-section h3 {
-  margin-top: 0;
-  font-size: 16px;
-}
-
-.donation-section p {
-  font-size: 12px;
-  color: #555;
-  margin: 10px 0;
-}
-
-.donate-button {
-  display: inline-block;
-  background-color: #0070ba;
-  color: white;
-  text-decoration: none;
-  padding: 10px 20px;
-  border-radius: 5px;
-  font-weight: bold;
-  transition: background-color 0.2s;
-}
-
-.donate-button:hover {
-  background-color: #005c9c;
-}
+      text-align: center;
+      padding-top: 10px;
+      margin-top: 10px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 8px;
+      color: #555;
+    }
+    .donation-section h3 {
+      margin-bottom: 8px;
+      font-size: 16px;
+      color: #333;
+    }
+    .donate-button {
+      display: inline-block;
+      margin-top: 8px;
+      background-color: #0070ba;
+      color: #fff;
+      text-decoration: none;
+      padding: 8px 20px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .donate-button:hover {
+      background-color: #005c9c;
+    }
   </style>
 </head>
 <body>
-  <h3>RMS Navigator v1.6.0</h3>
-  <div class="subtitle">
+  <h1>RMS Navigator v1.7.0</h1>
+  <h2>Your Toolkit for Faster, Smarter Current RMS Workflows</h2>
 
-  </div>
+  <p style="text-align:center; font-size:12px; margin-bottom:16px;">
+    🔗 <a href="https://github.com/ClearsoundPro/RMS-Navigator" target="_blank">
+      Latest RMS-Navigator Info & Releases
+    </a>
+  </p>
 
-  <label for="subdomainInput">Company Subdomain:</label>
+  <label for="subdomainInput">Company Subdomain</label>
   <div class="subdomain-wrapper">
-    <input type="text" id="subdomainInput" placeholder="TestCompany">
+    <input id="subdomainInput" type="text" placeholder="yourcompany" />
     <span class="domain-suffix">.current-rms.com</span>
   </div>
 
-  <label for="apiKeyInput">API Key:</label>
-  <input type="password" id="apiKeyInput" placeholder="Enter your API Key">
+  <label for="apiKeyInput">API Key</label>
+  <input id="apiKeyInput" type="password" placeholder="Enter your API Key" />
 
   <label class="module-toggle">
-    <input type="checkbox" id="enableShortagesCheckbox" checked>
+    <input id="enableShortagesCheckbox" type="checkbox" checked />
     Enable Shortages Module
   </label>
+
   <label class="module-toggle">
-    <input type="checkbox" id="enableSuppliersCheckbox" checked>
+    <input id="enableSuppliersCheckbox" type="checkbox" checked />
     Enable Suppliers Module
   </label>
 
   <label class="module-toggle">
-    <input type="checkbox" id="enableMessageBoxCheckbox" checked>
-    Enable Message Box Module
-  </label>
-
-  <label class="module-toggle">
-    <input type="checkbox" id="enableOptionalAccessoriesCheckbox" checked>
+    <input id="enableOptionalAccessoriesCheckbox" type="checkbox" checked />
     Enable Optional Accessories Module
   </label>
 
   <label class="module-toggle">
-    <input type="checkbox" id="enableHideOrangeLinesCheckbox">
-    Hide “below‐cost” rows
+    <input id="enableMessageBoxCheckbox" type="checkbox" checked />
+    Enable Message Box Module
+  </label>
+
+  <label class="module-toggle">
+    <input id="enableVolumeCheckbox" type="checkbox" checked />
+    Enable Total Volume Module
+    <button class="clear-cache-btn" id="clearVolumeCacheBtn">Reset Item Volume Cache</button>
+  </label>
+
+  <label class="module-toggle">
+    <input id="enableHideOrangeLinesCheckbox" type="checkbox" />
+    Hide “below-cost” rows
   </label>
 
   <button id="saveBtn">Save Settings</button>
 
   <div class="donation-section">
-    <h4>Support RMS Navigator</h4>
-    <p>RMS Navigator is completely free to use. If you find it helpful and want to support its development, consider making a small donation via PayPal — it’s much appreciated!</p>
+    <h3>Support RMS Navigator</h3>
+    <p>
+      RMS Navigator is completely free to use. If you find it helpful and want to support its development, consider making a small donation via PayPal — it’s much appreciated!    </p>
     <a href="https://www.paypal.me/danridd" target="_blank" class="donate-button">
       ❤️ Donate via PayPal
     </a>

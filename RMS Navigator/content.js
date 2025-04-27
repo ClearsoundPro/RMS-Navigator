@@ -1211,3 +1211,117 @@ pollingFallback();
 
 
 });
+
+
+
+
+
+
+// Volume Plug in 
+
+
+(async function listVolumesWithCache() {
+  // ── 0) Respect the user’s Enable Volume setting ──
+  chrome.storage.sync.get({ enableVolume: true }, items => {
+    if (!items.enableVolume) {
+      console.log('Volume Module disabled via settings.');
+      return;
+    }
+    
+    (async () => {  
+      const API_TOKEN     = 'V3y7QZ87EA9K8BGEzCxG';
+      const API_SUBDOMAIN = 'clearsound';
+      const PER_PAGE      = 100;
+
+      // ── 1) Get Opportunity ID from URL ──
+      const m = location.pathname.match(/opportunities\/(\d+)/);
+      if (!m) return console.error('Couldn’t parse opportunity ID');
+      const oppId = m[1];
+
+      // ── 2) Ensure the “Total Volume” row exists and is aligned ──
+      const weightLi = document.getElementById('weight_total')?.closest('li');
+      if (weightLi && !document.getElementById('volume_total')) {
+        const labelW = getComputedStyle(weightLi.querySelector('span:not([id])')).width;
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <span class="detail-label" style="display:inline-block;width:${labelW};">
+            Total Volume:
+          </span>
+          <span id="volume_total">… m³</span>
+        `;
+        weightLi.after(li);
+      }
+
+      // ── 3) Build or load productVolumeMap (productId → equipment_volume_m2) ──
+      let productVolumeMap = window.productVolumeMap;
+      if (!productVolumeMap) {
+        const saved = localStorage.getItem('productVolumeMap');
+        if (saved) {
+          productVolumeMap = JSON.parse(saved);
+          console.log('♻️ Loaded productVolumeMap from localStorage');
+        }
+      }
+      if (!productVolumeMap) {
+        productVolumeMap = {};
+        let page = 1;
+        while (true) {
+          const url = `https://api.current-rms.com/api/v1/products?page=${page}&per_page=${PER_PAGE}&filtermode=all`;
+          const res = await fetch(url, {
+            headers: {
+              'Content-Type':  'application/json',
+              'X-AUTH-TOKEN':  API_TOKEN,
+              'X-SUBDOMAIN':   API_SUBDOMAIN
+            }
+          });
+          if (!res.ok) break;
+          const body = await res.json();
+          const prods = body.data || body.products || [];
+          if (!prods.length) break;
+          prods.forEach(p => {
+            productVolumeMap[p.id] = p.custom_fields?.equipment_volume_m2 || 0;
+          });
+          page++;
+        }
+        window.productVolumeMap = productVolumeMap;
+        localStorage.setItem('productVolumeMap', JSON.stringify(productVolumeMap));
+        console.log('✅ Built and cached productVolumeMap for', Object.keys(productVolumeMap).length, 'products');
+      }
+
+      // ── 4) Fetch opportunity_items (with nested item) ──
+      const API = `https://api.current-rms.com/api/v1/opportunities/${oppId}/opportunity_items?include=%5Bitem%5D`;
+      let records;
+      try {
+        const res = await fetch(API, {
+          headers: {
+            'Content-Type':  'application/json',
+            'X-AUTH-TOKEN':  API_TOKEN,
+            'X-SUBDOMAIN':   API_SUBDOMAIN
+          }
+        });
+        if (!res.ok) throw new Error(res.statusText);
+        const body = await res.json();
+        records = body.data || body.opportunity_items || [];
+      } catch (err) {
+        return console.error('Fetch failed:', err);
+      }
+
+      // ── 5) Build table and sum using the map ──
+      const tableData = records.map(r => {
+        const pid = r.item_id;
+        const vol = productVolumeMap[pid] || 0;
+        return {
+          name:                r.item?.name || '–',
+          quantity:            r.quantity || 1,
+          equipment_volume_m2: vol,
+          line_volume_m2:      (vol * (r.quantity||1)).toFixed(2)
+        };
+      });
+      console.table(tableData);
+
+      const total = tableData.reduce((sum, row) => sum + parseFloat(row.line_volume_m2), 0);
+      document.getElementById('volume_total').textContent = total.toFixed(2) + ' m³';
+      console.log(`🔢 Total Volume summed = ${total.toFixed(2)} m³`);
+    })();
+
+  });
+})();
