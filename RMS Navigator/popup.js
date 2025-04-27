@@ -1,42 +1,73 @@
-document.addEventListener('DOMContentLoaded', restoreOptions);
-document.getElementById('saveBtn').addEventListener('click', saveOptions);
-document.getElementById('clearVolumeCacheBtn').addEventListener('click', clearVolumeCache);
+// popup.js
 
 document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('clearVolumeCacheBtn');
-  if (btn) btn.addEventListener('click', clearVolumeCache);
-});
+  // Restore saved options
+  restoreOptions();
 
-function clearVolumeCache() {
-  delete window.productVolumeMap;
-  localStorage.removeItem('productVolumeMap');
-  alert('Volume cache cleared!');
-}
+  // Save Settings
+  const saveBtn = document.getElementById('saveBtn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveOptions);
+  }
 
+  // Clear Volume Cache
+  const clearBtn = document.getElementById('clearVolumeCacheBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      // execute in page context
+      chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+        const tabId = tabs[0]?.id;
+        if (!tabId) return alert('No active tab');
+        chrome.tabs.executeScript(tabId, {
+          code: `
+            delete window.productVolumeMap;
+            localStorage.removeItem('productVolumeMap');
+            console.log('Volume cache cleared from page');
+          `
+        });
+      });
+
+      // UI feedback
+      clearBtn.disabled = true;
+      clearBtn.textContent = '✓ Cleared!';
+      clearBtn.style.backgroundColor = '#28a745';
+      setTimeout(() => {
+        clearBtn.disabled = false;
+        clearBtn.textContent = 'Reset Item Volume Cache';
+        clearBtn.style.backgroundColor = '';
+      }, 1200);
+    });
+  }
+    });
+
+/**
+ * Save extension options.
+ */
 function saveOptions() {
-  const subdomainVal = document.getElementById('subdomainInput').value.trim();
-  const apiKeyVal = document.getElementById('apiKeyInput').value.trim();
-  const enableShortagesVal = document.getElementById('enableShortagesCheckbox').checked;
-  const enableSuppliersVal = document.getElementById('enableSuppliersCheckbox').checked;
-  const enableVolumeVal = document.getElementById('enableVolumeCheckbox').checked;
-  const enableMessageBoxVal = document.getElementById('enableMessageBoxCheckbox').checked;
-  const enableOptionalAccVal = document.getElementById('enableOptionalAccessoriesCheckbox').checked;
-  const enableHideOrangeLinesVal = document.getElementById('enableHideOrangeLinesCheckbox').checked;
+  const subdomain = document.getElementById('subdomainInput').value.trim();
+  const apiKey = document.getElementById('apiKeyInput').value.trim();
+  const enableShortages = document.getElementById('enableShortagesCheckbox').checked;
+  const enableSuppliers = document.getElementById('enableSuppliersCheckbox').checked;
+  const enableVolume = document.getElementById('enableVolumeCheckbox').checked;
+  const enableMessageBox = document.getElementById('enableMessageBoxCheckbox').checked;
+  const enableOptionalAcc = document.getElementById('enableOptionalAccessoriesCheckbox').checked;
+  const hideOrangeLines = document.getElementById('enableHideOrangeLinesCheckbox').checked;
 
   chrome.storage.sync.set({
-    subdomain: subdomainVal,
-    apiKey: apiKeyVal,
-    enableShortages: enableShortagesVal,
-    enableSuppliers: enableSuppliersVal,
-    enableVolume: enableVolumeVal,
-    enableMessageBox: enableMessageBoxVal,
-    enableOptionalAccessories: enableOptionalAccVal,
-    hideOrangeLines: enableHideOrangeLinesVal
-  }, () => {
-    alert('Settings saved!');
-  });
+    subdomain,
+    apiKey,
+    enableShortages,
+    enableSuppliers,
+    enableVolume,
+    enableMessageBox,
+    enableOptionalAccessories: enableOptionalAcc,
+    hideOrangeLines
+  }, () => alert('Settings saved!'));
 }
 
+/**
+ * Restore extension options when popup loads.
+ */
 function restoreOptions() {
   chrome.storage.sync.get({
     subdomain: '',
