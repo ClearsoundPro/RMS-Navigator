@@ -200,7 +200,7 @@ _A little nudge for CurrentRMS_
 - Immediate visibility of cubic volume for logistics and planning.  
 - Caches volume data for faster subsequent loads.  
 - Zero configuration beyond creating the custom field.
-- 
+  
 ---
 
 ### Hide “below-cost” Rows
