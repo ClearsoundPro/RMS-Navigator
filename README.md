@@ -169,6 +169,7 @@ _A little nudge for CurrentRMS_
 ---
 
 # Total Volume Module
+<img width="169" alt="Screenshot 2025-04-27 at 05 52 37" src="https://github.com/user-attachments/assets/aae298d3-0d80-418d-bdf2-aaa72b5d4d6b" />
 
 **Location**: In the Opportunity sidebar under **Details**, next to **Total Weight**.
 
