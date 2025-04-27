@@ -1,10 +1,12 @@
 {
   "manifest_version": 3,
   "name": "RMS Navigator",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "A little nudge for CurrentRMS",
   "permissions": [
-    "storage"
+    "storage",
+    "tabs",
+    "scripting"
   ],
   "action": {
     "default_popup": "popup.html"
@@ -22,7 +24,8 @@
     }
   ],
   "host_permissions": [
-    "https://api.current-rms.com/*"
+    "https://api.current-rms.com/*",
+    "https://*.current-rms.com/*"
   ],
   "icons": {
     "48": "icon48.png"
