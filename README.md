@@ -1,16 +1,16 @@
-# RMS-Navigator v1.6.0  
+# RMS-Navigator v1.7.0  
 _A little nudge for CurrentRMS_
 
 ## Current Modules  
 - **Shortages**  
 - **Suppliers**  
 - **Message Box**  
-- **Optional Accessories**  
+- **Optional Accessories**
+- **Total Volume** (new feature)
 - **Hide “below-cost” Rows**  
 
 ## Future Modules  
 - **Hotels**  
-- **Volume Calculator**  
 - **LOLER Testing**  
 - **Ladder Testing**  
 - **Automated Activities**  
@@ -164,8 +164,42 @@ _A little nudge for CurrentRMS_
 
 **Benefits**  
 - Never miss upsell opportunities.  
-- Streamlines adding accessories.  
+- Streamlines adding accessories.
 
+---
+
+# Total Volume Module
+
+**Location**: In the Opportunity sidebar under **Details**, next to **Total Weight**.
+
+**What it does**
+- Calculates the total equipment volume (m³) for all line items on the Opportunity.
+- Displays a **Total Volume** value in the sidebar.
+
+> 🔧 **Important:**  
+> - Create a Product custom field named **Equipment Volume m2**.  
+> - On first run, the module caches all product volumes, which may take 1–2 minutes.  
+> - After caching, subsequent loads are fast.  
+> - If you add new stock or update volumes, click **Reset item volume cache** in RMS-Navigator to rebuild the cache.
+
+**How it works**
+1. Reads the Opportunity ID from the URL.  
+2. Ensures a **Total Volume** row exists in the details list.  
+3. Loads or fetches `equipment_volume_m2` for each product via the API, caching results in `localStorage`.  
+4. Fetches all `opportunity_items` (including nested item data).  
+5. Computes each line’s volume = `quantity × equipment_volume_m2`.  
+6. Sums line volumes and updates the **Total Volume** field (in m³).
+
+**Trigger & UI**
+- Runs automatically when loading an Opportunity page.  
+- Sidebar shows **Total Volume: X.XX m³**.  
+- Use **Reset item volume cache** to refresh cached data.
+
+**Benefits**
+- Immediate visibility of cubic volume for logistics and planning.  
+- Caches volume data for faster subsequent loads.  
+- Zero configuration beyond creating the custom field.
+- 
 ---
 
 ### Hide “below-cost” Rows
