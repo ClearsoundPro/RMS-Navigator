@@ -100,6 +100,10 @@ function handleOpportunityPopup() {
 
 
 
+
+
+
+
 //
 // ── Shortages Module  ─────────────────────────────────────────────────
 //
@@ -795,225 +799,170 @@ chrome.storage.sync.get({
 
 
 
-
-//Mark PO as Sent
+// ------------------------------------------------------------------------------------------------
+// Mark PO as Sent (unified detail + print view, skip if already sent, poll for discussions/print-tab)
+// ------------------------------------------------------------------------------------------------
 (async () => {
-  // ── 0) globally disable Rails’ data-confirm on the real “Mark as sent” link ──
-  const realLink = document.querySelector('a[data-method="post"][href*="/mark_as_sent"]');
-  if (realLink) {
-    realLink.removeAttribute('data-confirm');
-    if (window.Rails && typeof window.Rails.confirm === 'function') {
-      window.Rails.confirm = () => true;
-    }
-    window.confirm = () => true;
+  // ── helper to fetch the detail page and detect real “Mark as sent” link ─────────────────────────
+  async function hasMarkAsSentLink(poId) {
+    const resp = await fetch(`${window.location.origin}/purchase_orders/${poId}`, { credentials: 'include' });
+    if (!resp.ok) throw new Error(`Failed to fetch detail page: ${resp.status}`);
+    const html = await resp.text();
+    const doc  = new DOMParser().parseFromString(html, 'text/html');
+    return !!doc.querySelector('a[data-method="post"][href*="/mark_as_sent"]');
   }
 
-  // ── 1) Helper: fully-automate “Mark as sent” by loading the PO in a hidden iframe ──
+  // ── helper to click “mark as sent” inside a hidden iframe ───────────────────────────────────────
   function markPOAsSent(poId) {
-    const search = window.location.search; // preserve any ?rp=…
-    const src    = `${window.location.origin}/purchase_orders/${poId}${search}`;
+    const src = `${window.location.origin}/purchase_orders/${poId}${window.location.search}`;
     return new Promise((resolve, reject) => {
       const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1px;height:1px';
-      document.body.appendChild(iframe);
+      Object.assign(iframe.style, {
+        position: 'absolute', top: '-9999px', left: '-9999px',
+        width: '1px', height: '1px'
+      });
+      document.documentElement.appendChild(iframe);
 
       iframe.onload = () => {
         try {
-          const win  = iframe.contentWindow;
-          // inside iframe also strip any data-confirm before clicking
-          win.document.querySelectorAll('a[data-confirm]').forEach(el => el.removeAttribute('data-confirm'));
+          const win = iframe.contentWindow;
+          win.document.querySelectorAll('[data-confirm]').forEach(e => e.removeAttribute('data-confirm'));
           win.confirm = () => true;
           const link = win.document.querySelector('a[data-method="post"][href*="/mark_as_sent"]');
           if (!link) throw new Error('Link not found in iframe');
           link.click();
-          console.log(`✅ PO #${poId} “Mark as sent” clicked.`);
-          cleanup();
+          setTimeout(() => iframe.remove(), 200);
           resolve();
         } catch (err) {
-          cleanup();
+          iframe.remove();
           reject(err);
         }
       };
-
-      iframe.onerror = err => {
-        cleanup();
-        reject(err);
-      };
-
-      function cleanup() {
-        setTimeout(() => iframe.remove(), 200);
-      }
-
+      iframe.onerror = e => { iframe.remove(); reject(e); };
       iframe.src = src;
     });
   }
 
-  // ── 2) Opportunity page: inject Suppliers list (unchanged colour logic) ──
-  const isCostings = window.location.search.includes('view=c');
-  if (!isCostings) {
-    const basePath = window.location.pathname.split('?')[0];
-    const baseUrl  = `${window.location.origin}${basePath}`;
-    const resp = await fetch(`${baseUrl}?view=c`, { credentials: 'same-origin' });
-    if (resp.ok) {
-      const html = await resp.text();
-      const doc  = new DOMParser().parseFromString(html,'text/html');
-      const map = {};
-      doc.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
-        const sup = tr.querySelector('td.optional-01.asset.asset-column')?.textContent.trim();
-        if (!sup || ['Bulk Stock','Non-Stock Booking','Group Booking','******CLEARSOUND STOCK******',
-                     'Dan Ridd','Liam Murphy','Rob Burton','Daniel Gibbs'].includes(sup)) return;
-        const poCell = tr.querySelector('td.optional-04.purchase-order-column');
-        let poText='', poHref='', badgeClasses=[];
-        if (poCell) {
-          const badge = poCell.firstElementChild;
-          if (badge) {
-            const a = badge.tagName.toLowerCase()==='a'? badge : badge.querySelector('a');
-            if (a) { poText = a.textContent.trim(); poHref = a.href; }
-            badgeClasses = Array.from(badge.classList);
-          }
-        }
-        if (!map[sup]) map[sup] = { poText, poHref, badgeClasses };
-      });
+  // ── build & show the modal ──────────────────────────────────────────────────────────────────────
+  function showModal(poId) {
+    if (document.getElementById('__po_sent_overlay')) return; // already shown
 
-      const suppliers = Object.entries(map);
-      if (suppliers.length) {
-        let supDiv = [...document.querySelectorAll('.group-side-content')]
-                     .find(d=>d.querySelector('h3')?.textContent.trim()==='Suppliers');
-        if (!supDiv) {
-          const sched = [...document.querySelectorAll('.group-side-content')]
-                        .find(d=>d.querySelector('h3')?.textContent.trim()==='Scheduling');
-          if (sched) {
-            supDiv = document.createElement('div');
-            supDiv.className='group-side-content';
-            supDiv.innerHTML='<h3>Suppliers</h3>';
-            sched.parentNode.insertBefore(supDiv,sched.nextSibling);
-          }
-        }
-        if (supDiv) {
-          supDiv.querySelector('ul.subhire-list')?.remove();
-          const ul = document.createElement('ul');
-          ul.className='subhire-list'; ul.style.paddingLeft='1em';
-          suppliers.forEach(([sup,{poText,poHref,badgeClasses}])=>{
-            const li=document.createElement('li');
-            li.textContent = sup+' — ';
-            const a=document.createElement('a');
-            Object.assign(a.style,{padding:'2px 6px',borderRadius:'4px',fontSize:'0.9em',
-              fontWeight:'bold',marginLeft:'4px',display:'inline-block',color:'white',
-              textDecoration:'none',cursor: poText ? 'pointer' : 'default'});
-            a.target='_blank';
-            if (poText) {
-              a.textContent=`PO #${poText}`; a.href=poHref;
-              const origIsGreen = badgeClasses.some(c=>/success|green/i.test(c));
-              a.style.backgroundColor = origIsGreen ? 'orange' : 'green';
-            } else {
-              a.textContent='No PO';
-              a.href=`${baseUrl}?sort=stock_category&view=c&supplier=${encodeURIComponent(sup)}`;
-              a.style.backgroundColor='red';
-            }
-            li.appendChild(a);
-            ul.appendChild(li);
-          });
-          supDiv.appendChild(ul);
-          console.log(`✅ Injected ${suppliers.length} suppliers.`);
-        }
-      }
+    const overlay = document.createElement('div');
+    overlay.id = '__po_sent_overlay';
+    Object.assign(overlay.style, {
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 99999
+    });
+
+    const modal = document.createElement('div');
+    Object.assign(modal.style, {
+      background: '#fff', borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+      width: '320px', maxWidth: '90%', fontFamily: '"Open Sans",Arial,sans-serif',
+      color: '#333', overflow: 'hidden'
+    });
+
+    const header = document.createElement('div');
+    header.textContent = 'Discussion Detected';
+    Object.assign(header.style, {
+      backgroundColor: '#f5f5f5', padding: '12px 16px',
+      fontSize: '1.1em', fontWeight: 'bold', borderBottom: '1px solid #ddd',
+      textAlign: 'center'
+    });
+
+    const body = document.createElement('div');
+    body.innerHTML = '<p style="margin:16px;line-height:1.4;text-align:center;">Mark purchase order as sent?</p>';
+
+    const footer = document.createElement('div');
+    Object.assign(footer.style, {
+      display: 'flex', justifyContent: 'space-around',
+      padding: '12px', background: '#fafafa', borderTop: '1px solid #ddd'
+    });
+
+    function makeBtn(txt, bg) {
+      const b = document.createElement('button');
+      b.textContent = txt;
+      Object.assign(b.style, {
+        padding: '8px 16px', border: 'none', borderRadius: '4px',
+        cursor: 'pointer', fontSize: '0.95em', fontWeight: 'bold',
+        backgroundColor: bg, color: '#fff'
+      });
+      return b;
     }
+
+    const btnCancel = makeBtn('Cancel', '#6c757d');
+    const btnYes    = makeBtn('Yes, mark sent', '#28a745');
+
+    btnCancel.addEventListener('click', () => overlay.remove());
+    btnYes.addEventListener('click', async () => {
+      overlay.remove();
+      try {
+        await markPOAsSent(poId);
+        // flash the “Number” field green
+        const dt = Array.from(document.querySelectorAll('.group-side-content dt'))
+                        .find(d => d.textContent.trim() === 'Number');
+        if (dt && dt.nextElementSibling) {
+          Object.assign(dt.nextElementSibling.style, {
+            backgroundColor: '#28a745', color: '#fff',
+            padding: '2px 6px', borderRadius: '4px'
+          });
+        }
+        setTimeout(() => window.location.reload(), 500);
+      } catch (err) {
+        console.error('❌ mark as sent failed:', err);
+        alert('Failed: ' + err.message);
+      }
+    });
+
+    footer.append(btnCancel, btnYes);
+    modal.append(header, body, footer);
+    overlay.appendChild(modal);
+    document.documentElement.appendChild(overlay);
   }
 
-  // ── 3) PO detail page: if there are discussions, show centered modal ──
+  // ── main polling logic ─────────────────────────────────────────────────────────────────────
   const m = window.location.pathname.match(/\/purchase_orders\/(\d+)/);
   if (!m) return;
   const poId = m[1];
 
-  // only if the “Mark as sent” action really exists
-  if (!document.querySelector('a[data-method="post"][href*="/mark_as_sent"]')) return;
-
-  // only if there is at least one discussion row
-  if (document.querySelectorAll('.table-responsive.discussions tbody tr').length === 0) return;
-
-  // build full-page overlay
-  const overlay = document.createElement('div');
-  Object.assign(overlay.style,{
-    position:'fixed',top:0,left:0,right:0,bottom:0,
-    backgroundColor:'rgba(0,0,0,0.4)',
-    display:'flex',alignItems:'center',justifyContent:'center',
-    zIndex:10000
-  });
-
-  // modal container
-  const modal = document.createElement('div');
-  Object.assign(modal.style,{
-    background:'#fff',borderRadius:'8px',boxShadow:'0 4px 16px rgba(0,0,0,0.2)',
-    width:'320px',maxWidth:'90%',fontFamily:'"Open Sans",Arial,sans-serif',
-    color:'#333',overflow:'hidden'
-  });
-
-  // header
-  const header = document.createElement('div');
-  header.textContent='Discussion Detected';
-  Object.assign(header.style,{
-    backgroundColor:'#f5f5f5',padding:'12px 16px',fontSize:'1.1em',
-    fontWeight:'bold',borderBottom:'1px solid #ddd',textAlign:'center'
-  });
-
-  // body
-  const body = document.createElement('div');
-  body.innerHTML=`<p style="margin:16px;line-height:1.4;text-align:center;">
-                    Mark purchase order as sent?
-                  </p>`;
-
-  // footer with buttons
-  const footer = document.createElement('div');
-  Object.assign(footer.style,{
-    display:'flex',justifyContent:'space-around',
-    padding:'12px',background:'#fafafa',borderTop:'1px solid #ddd'
-  });
-  function makeBtn(txt,bg){
-    const b=document.createElement('button');
-    b.textContent=txt;
-    Object.assign(b.style,{
-      padding:'8px 16px',border:'none',borderRadius:'4px',
-      cursor:'pointer',fontSize:'0.95em',fontWeight:'bold',
-      backgroundColor:bg,color:'#fff'
-    });
-    return b;
-  }
-  const btnYes=makeBtn('Yes, mark sent','#28a745');
-  const btnNo =makeBtn('Cancel','#6c757d');
-  footer.append(btnNo,btnYes);
-
-  modal.append(header,body,footer);
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-
-  function closeModal(){ overlay.remove(); }
-
-  btnNo.addEventListener('click',()=>{ closeModal(); });
-  btnYes.addEventListener('click', async () => {
-    closeModal();
-    try {
-      await markPOAsSent(poId);
-      // flash the “Number” field green
-      const dt = [...document.querySelectorAll('.group-side-content dt')]
-                    .find(d => d.textContent.trim() === 'Number');
-      if (dt && dt.nextElementSibling) {
-        Object.assign(dt.nextElementSibling.style, {
-          backgroundColor: '#28a745',
-          color:           '#fff',
-          padding:         '2px 6px',
-          borderRadius:    '4px'
-        });
-      }
-      // delay the refresh slightly
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-    } catch (err) {
-      console.error('❌ Failed to mark as sent:', err);
-      alert('Failed: ' + err.message);
+  // bail early if there is absolutely no “Mark as sent” link on detail page
+  try {
+    const hasLink = await hasMarkAsSentLink(poId);
+    if (!hasLink) {
+      console.log('ℹ️ PO already sent (no mark_as_sent link) — skipping modal.');
+      return;
     }
-  });
+  } catch (err) {
+    console.warn('⚠️ could not verify mark_as_sent link:', err);
+    // proceed anyway
+  }
+
+  let tries = 0;
+  const poll = setInterval(() => {
+    tries++;
+
+    // detail-view: any discussion rows?
+    const hasDetailRows = document.querySelectorAll('.table-responsive.discussions tbody tr').length > 0;
+
+    // print-view: that blue toggle only appears when there's a discussion tab
+    const hasPrintTab =
+      !!document
+        .querySelector('#discussion_buttons')
+        ?.querySelector('.btn.btn-primary.dropdown-toggle');
+
+    if (hasDetailRows || hasPrintTab) {
+      clearInterval(poll);
+      console.log('✅ Discussion detected — showing modal');
+      showModal(poId);
+    }
+    else if (tries > 20) {
+      clearInterval(poll);
+      console.warn('⚠️ gave up after 20 tries — no discussions/tab found');
+    }
+  }, 500);
 })();
+
   }
 
 });
@@ -1326,3 +1275,138 @@ chrome.storage.sync.get({
   }
   runVolumeModule({ apiKey, subdomain });
 });
+
+
+
+
+
+
+
+
+
+// Delay execution to allow page to load
+setTimeout(function() {
+  // === Custom Message Box Plugin (Manual Only) ===
+
+  // Utility: subtle click sound
+  function playSubtleClick() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.setValueAtTime(300, ctx.currentTime);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.03);
+  }
+
+  // Utility: extract opportunity ID from URL
+  function extractOpportunityId(url) {
+    const m = url.match(/\/opportunities\/(\d+)/);
+    return m ? m[1] : null;
+  }
+
+  // Fetch the edit form HTML and extract the textarea description value
+  function fetchDescription(id) {
+    return fetch(`/opportunities/${id}/edit`, { credentials: 'same-origin' })
+      .then(res => res.ok ? res.text() : Promise.reject(res.status))
+      .then(html => {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const ta = doc.querySelector('textarea#opportunity_description');
+        return ta ? ta.value : '';
+      });
+  }
+
+  // Show modal with editable textarea and Save/Close, centered styling
+  function showPopup(initialText, id) {
+    const overlay = document.createElement('div');
+    Object.assign(overlay.style, {
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 9998
+    });
+    document.body.appendChild(overlay);
+
+    const modal = document.createElement('div');
+    Object.assign(modal.style, {
+      position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+      backgroundColor: '#fff', border: '2px solid #333', padding: '20px', width: '420px',
+      boxShadow: '0 4px 10px rgba(0,0,0,0.2)', borderRadius: '6px', zIndex: 9999,
+      fontFamily: 'Arial, sans-serif', textAlign: 'center'
+    });
+    document.body.appendChild(modal);
+
+    const h2 = document.createElement('h2');
+    h2.textContent = 'Message Box';
+    Object.assign(h2.style, {
+      margin: '0 0 10px', fontSize: '20px', color: '#333',
+      borderBottom: '1px solid #ddd', paddingBottom: '8px', textAlign: 'center'
+    });
+    modal.appendChild(h2);
+
+    const textarea = document.createElement('textarea');
+    textarea.value = initialText;
+    Object.assign(textarea.style, {
+      width: '100%', height: '150px', fontSize: '14px', padding: '8px', boxSizing: 'border-box',
+      border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical', margin: '0 auto', display: 'block'
+    });
+    modal.appendChild(textarea);
+
+    const btnRow = document.createElement('div');
+    Object.assign(btnRow.style, { marginTop: '10px', textAlign: 'center' });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save';
+    Object.assign(saveBtn.style, {
+      margin: '0 8px', padding: '6px 12px', backgroundColor: '#4CAF50', color: '#fff',
+      border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'inline-block'
+    });
+    saveBtn.onclick = () => {
+      const desc = textarea.value;
+      overlay.remove(); modal.remove();
+      const csrf = document.querySelector('meta[name="csrf-token"]').content;
+      fetch(`/opportunities/${id}`, {
+        method: 'PATCH', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json','X-CSRF-Token': csrf},
+        body: JSON.stringify({ opportunity: { description: desc } })
+      });
+    };
+    btnRow.appendChild(saveBtn);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    Object.assign(closeBtn.style, {
+      margin: '0 8px', padding: '6px 12px', backgroundColor: '#f44336', color: '#fff',
+      border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'inline-block'
+    });
+    closeBtn.onclick = () => { overlay.remove(); modal.remove(); };
+    btnRow.appendChild(closeBtn);
+
+    modal.appendChild(btnRow);
+  }
+
+  // Manual button in Actions list only
+  (function waitForActions() {
+    const hdr = Array.from(document.querySelectorAll('.group-side-content h3'))
+      .find(h3 => h3.textContent.trim() === 'Actions');
+    if (!hdr) return setTimeout(waitForActions, 300);
+
+    let ul = hdr.nextElementSibling;
+    while (ul && ul.tagName !== 'UL') ul = ul.nextElementSibling;
+    if (!ul) return;
+
+    const orig = Array.from(ul.children)
+      .find(li => li.textContent.trim().startsWith('Shortages List'));
+    if (!orig) return;
+
+    const li = orig.cloneNode(false);
+    const icon = orig.querySelector('i'); if (icon) li.appendChild(icon.cloneNode(false));
+    li.appendChild(document.createTextNode(' Message Box'));
+    li.style.cursor = 'pointer';
+    li.onclick = () => {
+      playSubtleClick();
+      const id = extractOpportunityId(window.location.href);
+      fetchDescription(id).then(text => showPopup(text, id));
+    };
+
+    ul.insertBefore(li, orig);
+  })();
+}, 500); // End delayed init
