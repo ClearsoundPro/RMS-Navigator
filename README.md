@@ -1,4 +1,4 @@
-# RMS-Navigator v1.7.2
+# RMS-Navigator v1.7.3
 _A little nudge for CurrentRMS_
 
 ## Current Modules  
@@ -117,7 +117,7 @@ _A little nudge for CurrentRMS_
 ---
 
 ### Message Box Module
-<img width="436" alt="Screenshot 2025-04-26 at 12 12 49" src="https://github.com/user-attachments/assets/3eeafa48-84bf-4715-baef-7d33f51e1593" />
+![Screenshot 2025-04-28 at 15 43 02](https://github.com/user-attachments/assets/03766e85-b5bd-44e3-a9bb-cb890abe122e)
 
 **Location**: Automatically pops up center-stage when an Opportunity description is present.
 
@@ -130,7 +130,8 @@ _A little nudge for CurrentRMS_
 1. On page load, checks for a new Opportunity description.  
 2. Grabs text from `.expand-box-container p`.  
 3. After 500 ms, plays a 300 Hz click and shows a modal with the text.  
-4. Stores the Opportunity ID in sessionStorage to avoid repeats.  
+4. Stores the Opportunity ID in sessionStorage to avoid repeats.
+5. You can also re-open or update the Message Box at any time via the **Message Box** entry under **Actions** in the sidebar.  
 
 **Benefits**  
 - Ensures you never miss the Opportunity description or updates.  
