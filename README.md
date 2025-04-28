@@ -14,6 +14,7 @@ _A little nudge for CurrentRMS_
 - **Show shortages on text items**
 - **LOLER Inspection**  
 - **Ladder Inspection**  
+- **Sync opportunities up to Google calendar**  
 - **Automated Activities**  
 - **Warehouse Dashboard**  
 
