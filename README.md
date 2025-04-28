@@ -10,9 +10,10 @@ _A little nudge for CurrentRMS_
 - **Hide “below-cost” Rows**  
 
 ## Future Modules  
-- **Hotels**  
-- **LOLER Testing**  
-- **Ladder Testing**  
+- **Crew Hotels**
+- **Show shortages on text items**
+- **LOLER Inspection**  
+- **Ladder Inspection**  
 - **Automated Activities**  
 - **Warehouse Dashboard**  
 
