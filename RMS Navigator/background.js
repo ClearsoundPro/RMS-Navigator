@@ -4,9 +4,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     fetch(`https://api.current-rms.com/api/v1/opportunities/${request.opportunityNumber}/opportunity_items?q[has_shortage_eq]=true&filtermode=all`, {
       method: "GET",
       headers: {
-        "Content-Type": "application/json",
-        "X-AUTH-TOKEN": "",
-        "X-SUBDOMAIN": ""
+        'Content-Type':  'application/json',
+        'X-AUTH-TOKEN':  API_TOKEN,
+        'X-SUBDOMAIN':   API_SUBDOMAIN
       }
     })
     .then(response => response.json())
@@ -19,9 +19,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     fetch("https://api.current-rms.com/api/v1/availability/product", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "X-AUTH-TOKEN": "",
-        "X-SUBDOMAIN": ""
+        'Content-Type':  'application/json',
+        'X-AUTH-TOKEN':  API_TOKEN,
+        'X-SUBDOMAIN':   API_SUBDOMAIN
       },
       body: JSON.stringify({
         "booking_availability_view_options": {
