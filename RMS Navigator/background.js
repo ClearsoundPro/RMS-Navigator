@@ -5,8 +5,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        "X-AUTH-TOKEN": "V3y7QZ87EA9K8BGEzCxG",
-        "X-SUBDOMAIN": "clearsound"
+        "X-AUTH-TOKEN": "",
+        "X-SUBDOMAIN": ""
       }
     })
     .then(response => response.json())
@@ -20,8 +20,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-AUTH-TOKEN": "V3y7QZ87EA9K8BGEzCxG",
-        "X-SUBDOMAIN": "clearsound"
+        "X-AUTH-TOKEN": "",
+        "X-SUBDOMAIN": ""
       },
       body: JSON.stringify({
         "booking_availability_view_options": {
