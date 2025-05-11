@@ -1,4 +1,4 @@
-# RMS-Navigator v1.7.3
+# RMS-Navigator v1.7.4
 _A little nudge for CurrentRMS_
 
 ## Current Modules  
@@ -117,7 +117,8 @@ _A little nudge for CurrentRMS_
 ---
 
 ### Message Box Module
-![Screenshot 2025-04-28 at 15 43 02](https://github.com/user-attachments/assets/03766e85-b5bd-44e3-a9bb-cb890abe122e)
+![Screenshot 2025-05-11 at 21 26 56](https://github.com/user-attachments/assets/ed5546a7-0a46-4ca8-aa48-be8146f53246)
+
 
 **Location**: Automatically pops up center-stage when an Opportunity description is present.
 
