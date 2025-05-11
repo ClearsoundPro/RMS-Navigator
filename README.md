@@ -15,7 +15,7 @@ These modules are active and ready to use:
 
 ## 🚧 Future Modules
 
-_Most of these are already active internally — just need adapting for open release:_
+_Most of these are already active internally — just need adapting for public release:_
 
 - [ ] **Crew Hotels**
 - [ ] **Popup reminders for outstanding Dry Hire returns**
@@ -26,6 +26,8 @@ _Most of these are already active internally — just need adapting for open rel
 - [ ] **Sync opportunities with Google Calendar**
 - [ ] **Automated Activities**
 - [ ] **Warehouse Dashboard**
+- [ ] **AI Kit Builder**
+- [ ] **AI Assistant (Kit)**
 
 ---
 
