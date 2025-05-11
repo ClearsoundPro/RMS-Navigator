@@ -33,7 +33,7 @@ _Most of these are already active internally — just need adapting for public r
 
 ## 🚀 Installation
 
-1. Download the plugin ZIP from the [Releases](https://github.com/ClearsoundPro/RMS-Navigator/tree/mainpage) and unzip it.
+1. Download the plugin ZIP from the [Releases](https://github.com/ClearsoundPro/RMS-Navigator.git) and unzip it.
 2. In Chrome, go to `chrome://extensions`.
 3. Enable **Developer mode** using the toggle in the top-right corner.
 4. Click **Load unpacked** and select the unzipped plugin folder.
