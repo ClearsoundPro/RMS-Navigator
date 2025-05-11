@@ -3,104 +3,204 @@
 console.log('Custom content script loaded.');
 
 
+// ── SUPPLIERS MODULE (Resilient Injection via MutationObserver) ─────────────────
+(async function() {
+  const isCostings = window.location.search.includes('view=c');
+  const params     = new URLSearchParams(window.location.search);
+  const supplierIn = params.get('supplier');
+  const basePath   = window.location.pathname.split('?')[0];
+  const baseUrl    = `${window.location.origin}${basePath}`;
 
+  // Helper: click “Mark as sent” via hidden iframe, strip data-confirm
+  function markPOAsSent(poId) {
+    const src = `${window.location.origin}/purchase_orders/${poId}${window.location.search}`;
+    return new Promise((resolve, reject) => {
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1px;height:1px';
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        try {
+          const doc = iframe.contentWindow.document;
+          doc.querySelectorAll('[data-confirm]').forEach(el => el.removeAttribute('data-confirm'));
+          const link = doc.querySelector('a[data-method="post"][href*="/mark_as_sent"]');
+          if (!link) throw new Error('Link not found');
+          link.click();
+          cleanup();
+          resolve();
+        } catch (err) {
+          cleanup();
+          reject(err);
+        }
+      };
+      iframe.onerror = err => { cleanup(); reject(err); };
+      function cleanup() { setTimeout(() => iframe.remove(), 200); }
+      iframe.src = src;
+    });
+  }
 
+  if (!isCostings) {
+    // 1) Fetch & parse view=c
+    const resp = await fetch(`${baseUrl}?view=c`, { credentials: 'same-origin' });
+    if (!resp.ok) { console.error(`Fetch failed: ${resp.status}`); return; }
+    const html = await resp.text();
+    const doc  = new DOMParser().parseFromString(html, 'text/html');
 
-//
-// ── Message Box Popup Module ─────────────────────────────────────────────────
-//
+    // 2) Scrape suppliers
+    const map = {};
+    doc.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
+      const cell = tr.querySelector('td.optional-01.asset.asset-column');
+      if (!cell) return;
+      const sup = cell.textContent.trim();
+      if (!sup) return;
+      const blacklist = ['Bulk Stock','Non-Stock Booking','Group Booking','******CLEARSOUND STOCK******',
+        'Dan Ridd','Liam Murphy','Rob Burton','Daniel Gibbs','HOTEL','CA24 BDV PEUGEOT BOXER 3.5T VAN'];
+      if (blacklist.some(b => sup.includes(b))) return;
+      const poCell = tr.querySelector('td.optional-04.purchase-order-column');
+      let poText = '', poHref = '', badgeClasses = [];
+      if (poCell) {
+        const badge = poCell.firstElementChild;
+        const aTag  = badge?.tagName.toLowerCase() === 'a' ? badge : badge?.querySelector('a');
+        if (aTag) { poText = aTag.textContent.trim(); poHref = aTag.href; }
+        badgeClasses = badge?.classList ? Array.from(badge.classList) : [];
+      }
+      if (!map[sup]) map[sup] = { poText, poHref, badgeClasses };
+    });
+    const suppliers = Object.entries(map);
+    if (!suppliers.length) { console.log('ℹ️ No suppliers to show.'); return; }
 
-// Play a subtle click sound
-function playSubtleClick() {
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-  oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
-  gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.03);
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-  oscillator.start();
-  oscillator.stop(audioContext.currentTime + 0.03);
-}
+    // 3) Inject/Update Suppliers panel
+    function injectSuppliersPanel() {
+      let supDiv = [...document.querySelectorAll('.group-side-content')]
+        .find(d => d.querySelector('h3')?.textContent.trim() === 'Suppliers');
+      if (!supDiv) {
+        const sched = [...document.querySelectorAll('.group-side-content')]
+          .find(d => d.querySelector('h3')?.textContent.trim() === 'Scheduling');
+        if (!sched) return;
+        supDiv = document.createElement('div');
+        supDiv.className = 'group-side-content';
+        supDiv.innerHTML = '<h3>Suppliers</h3>';
+        sched.parentNode.insertBefore(supDiv, sched.nextSibling);
+      }
+      const existing = supDiv.querySelector('ul.subhire-list');
+      if (existing && existing.children.length === suppliers.length) return;
+      existing?.remove();
 
-// Show the message-box popup
-function showPopup(message) {
-  console.log("Creating message box...");
-  const modal = document.createElement('div');
-  Object.assign(modal.style, {
-    position: 'fixed', top: '50%', left: '50%',
-    transform: 'translate(-50%, -50%)',
-    backgroundColor: '#fff', border: '2px solid #333',
-    padding: '25px', width: '400px',
-    boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
-    borderRadius: '8px', zIndex: '9999',
-    fontFamily: 'Arial, sans-serif', textAlign: 'center'
-  });
+      const ul = document.createElement('ul');
+      ul.className = 'subhire-list';
+      ul.style.paddingLeft = '1em';
 
-  const heading = document.createElement('h2');
-  heading.textContent = 'Message Box';
-  Object.assign(heading.style, {
-    marginBottom: '15px', fontSize: '20px',
-    color: '#333', borderBottom: '1px solid #ddd',
-    paddingBottom: '10px'
-  });
-  modal.appendChild(heading);
+      suppliers.forEach(([sup, {poText, poHref, badgeClasses}]) => {
+        const li = document.createElement('li');
+        li.textContent = sup + ' — ';
 
-  const content = document.createElement('p');
-  content.innerHTML = message.replace(/\n/g, '<br>');
-  Object.assign(content.style, {
-    fontSize: '16px', color: '#555', lineHeight: '1.5'
-  });
-  modal.appendChild(content);
+        const a = document.createElement('a');
+        Object.assign(a.style, {
+          padding:      '2px 6px',
+          borderRadius: '4px',
+          fontSize:     '0.9em',
+          fontWeight:   'bold',
+          marginLeft:   '4px',
+          display:      'inline-block',
+          color:        'white',
+          textDecoration:'none',
+          cursor:       'pointer'
+        });
+        a.target = '_blank';
 
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = 'Close';
-  Object.assign(closeBtn.style, {
-    marginTop: '20px', backgroundColor: '#4CAF50',
-    color: '#fff', border: 'none', padding: '10px 20px',
-    fontSize: '16px', cursor: 'pointer', borderRadius: '4px'
-  });
-  closeBtn.onclick = () => modal.remove();
-  modal.appendChild(closeBtn);
+        if (poText) {
+          a.textContent = `PO #${poText}`;
+          a.href        = poHref;
+          const isGreen = badgeClasses.some(c => /success|green/i.test(c));
+          a.style.backgroundColor = isGreen ? 'orange' : 'green';
+        } else {
+          a.textContent = 'No PO';
+          a.href        = `${baseUrl}?sort=stock_category&view=c&supplier=${encodeURIComponent(sup)}`;
+          a.style.backgroundColor = 'red';
+        }
 
-  document.body.appendChild(modal);
-}
+        a.addEventListener('mouseover', () => a.style.opacity = '0.8');
+        a.addEventListener('mouseout',  () => a.style.opacity = '1');
 
-// Extract opportunity ID from URL
-function extractOpportunityId(url) {
-  const match = url.match(/\/opportunities\/(\d+)/);
-  return match ? match[1] : null;
-}
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
 
-// Handle showing the message-box once per opportunity
-function handleOpportunityPopup() {
-  const id = extractOpportunityId(window.location.href);
-  if (!id) return console.log("No opportunity ID found in URL.");
+      supDiv.appendChild(ul);
+      console.log(`✅ Injected ${suppliers.length} suppliers.`);
+    }
 
-  const lastId = sessionStorage.getItem('lastOpportunityId');
-  if (lastId === id) return console.log("Message box already shown for this opportunity.");
+    // Initial injection
+    injectSuppliersPanel();
 
-  const msgEl = document.querySelector('.expand-box-container p');
-  if (!msgEl) return console.error("Message element not found.");
+    // Observe panel container for removal of panels
+    const schedPanel = [...document.querySelectorAll('.group-side-content')]
+      .find(d => d.querySelector('h3')?.textContent.trim() === 'Scheduling');
+    if (schedPanel && schedPanel.parentNode) {
+      const container = schedPanel.parentNode;
+      const observer = new MutationObserver(mutations => {
+        for (const m of mutations) {
+          if ([...m.removedNodes].some(n => n.classList && n.classList.contains('group-side-content'))) {
+            injectSuppliersPanel();
+            break;
+          }
+        }
+      });
+      observer.observe(container, { childList: true });
+    }
 
-  const text = msgEl.textContent.trim();
-  console.log("Extracted message:", text);
+    // 4) Context-menu handler for “Mark as sent”
+    document.body.addEventListener('contextmenu', ev => {
+      const link = ev.target.closest('.subhire-list a[href*="/purchase_orders/"]');
+      if (!link || link.textContent.startsWith('No PO')) return;
+      ev.preventDefault();
+      document.querySelectorAll('.__po-sent-popup').forEach(x => x.remove());
+      const box = document.createElement('div');
+      box.className = '__po-sent-popup';
+      box.textContent = 'Mark as sent';
+      Object.assign(box.style, {
+        position:     'absolute',
+        top:          `${ev.pageY}px`,
+        left:         `${ev.pageX}px`,
+        padding:      '6px 12px',
+        background:   '#333',
+        color:        'white',
+        borderRadius: '4px',
+        cursor:       'pointer',
+        zIndex:       9999,
+        fontSize:     '0.9em'
+      });
+      document.body.appendChild(box);
+      const cleanup = () => box.remove();
+      setTimeout(() => {
+        document.addEventListener('click', cleanup, { once: true });
+        window.addEventListener('scroll', cleanup, { once: true });
+      }, 10);
+      box.addEventListener('click', () => {
+        cleanup();
+        const m = link.href.match(/\/purchase_orders\/(\d+)/);
+        if (!m) return;
+        const poId = m[1];
+        link.style.opacity = '0.6';
+        markPOAsSent(poId)
+          .then(() => link.style.backgroundColor = 'green')
+          .catch(() => {})
+          .finally(() => link.style.opacity = '');
+      });
+    });
 
-  setTimeout(() => {
-    playSubtleClick();
-    showPopup(text);
-  }, 500);
-
-  sessionStorage.setItem('lastOpportunityId', id);
-}
-
-
-
-
-
-
+  } else {
+    // Auto-select on costings page
+    let count = 0;
+    document.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
+      const name = tr.querySelector('td.optional-01.asset.asset-column')?.textContent.trim();
+      if (name === supplierIn) {
+        const cb = tr.querySelector('input[type="checkbox"]');
+        if (cb && !cb.checked) { cb.click(); count++; }
+      }
+    });
+    console.log(`✔️ Auto-selected ${count} row${count===1?'':'s'} for “${supplierIn}.”`);
+  }
+})();
 
 
 
@@ -108,12 +208,58 @@ function handleOpportunityPopup() {
 // ── Shortages Module  ─────────────────────────────────────────────────
 //
 
+chrome.storage.sync.get({ enableShortages: true }, ({ enableShortages }) => {
+  if (!enableShortages) return;
+
+// ---- Resilient “Shortages List” injection ----
+function injectShortagesListButton() {
+  const actionsHeader = Array.from(document.querySelectorAll('.group-side-content h3'))
+    .find(h3 => h3.textContent.trim() === 'Actions');
+  if (!actionsHeader) return;
+
+  let ul = actionsHeader.nextElementSibling;
+  while (ul && ul.tagName !== 'UL') ul = ul.nextElementSibling;
+  if (!ul) return;
+
+  // prevent duplicate
+  if (ul.querySelector('.shortages-injected')) return;
+
+  const availabilityLi = Array.from(ul.children)
+    .find(li => li.textContent.trim().startsWith('Availability'));
+  if (!availabilityLi) return;
+
+  const newLi = availabilityLi.cloneNode(false);
+  newLi.classList.add('shortages-injected');
+
+  const origIcon = availabilityLi.querySelector('i');
+  if (origIcon) newLi.appendChild(origIcon.cloneNode(false));
+  newLi.appendChild(document.createTextNode(' Shortages List'));
+
+  newLi.style.cursor = 'pointer';
+  newLi.title = 'Click to check shortages';
+  newLi.addEventListener('click', fetchShortagesAndDisplay);
+  newLi.addEventListener('mouseover', () => newLi.style.backgroundColor = '#f0f0f0');
+  newLi.addEventListener('mouseout',  () => newLi.style.backgroundColor = '');
+
+  ul.insertBefore(newLi, availabilityLi);
+  console.log('✅ “Shortages List” button injected successfully.');
+}
+
+// initial inject
+injectShortagesListButton();
+
+// re-inject on any DOM changes
+new MutationObserver(injectShortagesListButton)
+  .observe(document.body, { childList: true, subtree: true });
+  
+
+
 // Helper: Retrieve API settings from chrome.storage
 function getAPISettings() {
   return new Promise((resolve) => {
     chrome.storage.sync.get({
       apiKey: '',         // Stored API Key
-      subdomain: 'clearsound'  // Stored subdomain (if you want a default, otherwise leave empty)
+      subdomain: ''  // Stored subdomain
     }, function(items) {
       resolve(items);
     });
@@ -122,6 +268,7 @@ function getAPISettings() {
 
 // Function to fetch shortages data and display it in a popup
 function fetchShortagesAndDisplay() {
+  const popupContentEl = displayPopup("Please wait while I work out your shortages...");
   const opportunityNumber = window.location.href.split("/opportunities/")[1]?.split("?")[0];
   console.log("Opportunity Number:", opportunityNumber);
 
@@ -146,7 +293,7 @@ function fetchShortagesAndDisplay() {
 
       if (!data.opportunity_items) {
         console.error("No 'opportunity_items' found in response data.");
-        displayPopup("No shortages data found.");
+        popupContentEl.innerHTML = "No shortages data found.";
         return;
       }
 
@@ -198,15 +345,16 @@ function fetchShortagesAndDisplay() {
             }
           });
 
-          // Prepare the content with quarantine notice and correct quantity
+          // Prepare the content with quarantine notice and correct quantity (updated to new markup)
           const shortagesContent = Object.values(uniqueItems).map(item => {
             const quarantineNotice = item.quarantineQuantity > 0 
-              ? ` <span style="background-color: yellow; color: black;">**Quarantine x ${item.quarantineQuantity}**</span>` 
+              ? `<span class="quarantine-badge">Quarantine x ${item.quarantineQuantity}</span>` 
               : '';
-            return `${item.name} x ${item.available}${quarantineNotice}`;
-          }).join("<br>");
+            const rowStyle = item.quarantineQuantity > 0 ? 'class="shortage-row quarantine-row"' : 'class="shortage-row"';
+            return `<div ${rowStyle}><strong>${item.name}</strong> x ${item.available} ${quarantineNotice}</div>`;
+          }).join("");
 
-          displayPopup(shortagesContent);
+          popupContentEl.innerHTML = shortagesContent.replace(/\n/g, '<br>');
           // Send the shortages back to the opportunity
           postShortagesToOpportunity(opportunityNumber, shortagesContent);
         });
@@ -214,7 +362,7 @@ function fetchShortagesAndDisplay() {
     })
     .catch(error => {
       console.error("Error fetching shortages:", error);
-      displayPopup("Error fetching shortages data.");
+      popupContentEl.innerHTML = "Error fetching shortages data.";
     });
   });
 }
@@ -288,7 +436,11 @@ function postShortagesToOpportunity(opportunityNumber, shortages) {
   const requestBody = {
     "opportunity": {
       "custom_fields": {
-        "shortages": shortages,
+        "shortages": shortages
+          .replace(/<\/div>/gi, '\n')
+          .replace(/<[^>]*>/g, '')
+          .replace(/\s+\n/g, '\n')
+          .trim(),
         "last_shortages_check": now
       }
     }
@@ -466,16 +618,41 @@ function displayPopup(content) {
   modal.style.zIndex = '9999';
   modal.style.fontFamily = 'Arial, sans-serif';
   modal.style.textAlign = 'center';
-  
+
+  // --- Insert shortages styling (NEW) ---
+  const style = document.createElement('style');
+  style.textContent = `
+    .shortage-row {
+      margin-bottom: 6px;
+    }
+    .quarantine-row {
+      background-color: #fff8dc;
+      padding: 4px;
+      border-radius: 4px;
+    }
+    .quarantine-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      background-color: #ffeb3b;
+      color: #000;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 11px;
+      margin-left: 6px;
+    }
+  `;
+  document.head.appendChild(style);
+
   const modalHeading = document.createElement('h2');
   modalHeading.textContent = 'Shortages List';
   modalHeading.style.marginBottom = '15px';
-  modalHeading.style.fontSize = '20px';
-  modalHeading.style.color = '#333';
+  modalHeading.style.fontSize = '22px';
+  modalHeading.style.fontWeight = '700';
+  modalHeading.style.color = '#000';
   modalHeading.style.borderBottom = '1px solid #ddd';
   modalHeading.style.paddingBottom = '10px';
   modal.appendChild(modalHeading);
-  
+
   // Scrollable content with shortages list
   const modalContent = document.createElement('div');
   modalContent.style.maxHeight = '300px';
@@ -484,12 +661,39 @@ function displayPopup(content) {
   modalContent.style.color = '#555';
   modalContent.style.lineHeight = '1.5';
   modalContent.style.textAlign = 'left';
-  
+
   const contentText = document.createElement('p');
   contentText.innerHTML = content.replace(/\n/g, '<br>');
+
+  // Add spinner and animation CSS if content includes "Please wait"
+  if (content.includes('Please wait')) {
+    contentText.style.textAlign = 'center';
+
+    const spinner = document.createElement('div');
+    spinner.className = 'shortage-spinner';
+    spinner.style.margin = '15px auto 10px';
+    spinner.style.display = 'block';
+    spinner.style.width = '40px';
+    spinner.style.height = '40px';
+    spinner.style.border = '6px solid #f3f3f3';
+    spinner.style.borderTop = '6px solid #555';
+    spinner.style.borderRadius = '50%';
+    spinner.style.animation = 'spin 1s linear infinite';
+    contentText.appendChild(spinner);
+
+    const styleSpin = document.createElement('style');
+    styleSpin.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(styleSpin);
+  }
+
   modalContent.appendChild(contentText);
   modal.appendChild(modalContent);
-  
+
   // Close button
   const closeButton = document.createElement('button');
   closeButton.textContent = 'Close';
@@ -503,7 +707,7 @@ function displayPopup(content) {
   closeButton.style.borderRadius = '4px';
   closeButton.onclick = () => modal.remove();
   modal.appendChild(closeButton);
-  
+
   // Copy button
   const copyButton = document.createElement('button');
   copyButton.textContent = 'Copy';
@@ -516,11 +720,12 @@ function displayPopup(content) {
   copyButton.style.fontSize = '16px';
   copyButton.style.cursor = 'pointer';
   copyButton.style.borderRadius = '4px';
-  
+
   // Implement the copy functionality here
   copyButton.onclick = () => {
-      // Replace <br> with newline and remove HTML tags
-      const plainText = content.replace(/<br>/g, '\n').replace(/<[^>]*>/g, '');
+      // Extract text from each shortage row, join with newlines
+      const lines = Array.from(contentText.querySelectorAll('.shortage-row')).map(div => div.textContent.trim());
+      const plainText = lines.join('\n');
       const textarea = document.createElement('textarea');
       textarea.value = plainText;
       document.body.appendChild(textarea);
@@ -529,11 +734,18 @@ function displayPopup(content) {
       document.body.removeChild(textarea);
       alert('Copied to clipboard!');
   };
-  
+
   modal.appendChild(copyButton);
   document.body.appendChild(modal);
   console.log("Shortages popup displayed.");
+  return contentText;
 }
+
+});
+
+
+
+
 
 
 
@@ -546,9 +758,7 @@ chrome.storage.sync.get({
   enableHideOrangeLines: false
 }, ({ enableMessageBox, enableShortages, enableSuppliers, enableHideOrangeLines }) => {
 
-  if (enableMessageBox && !window.location.search.includes('view=c')) {
-    handleOpportunityPopup();
-  }
+
 
     // 4) Hide orange‐highlighted rows
     if (enableHideOrangeLines) {
@@ -557,244 +767,12 @@ chrome.storage.sync.get({
       });
     }
 
-  if (enableShortages) {
-    // inject “Shortages List” button
-    ;(function(){
-      const actionsHeader = Array.from(document.querySelectorAll('.group-side-content h3'))
-        .find(h3 => h3.textContent.trim() === 'Actions');
-      if (!actionsHeader) return console.warn('Actions header not found');
-      let ul = actionsHeader.nextElementSibling;
-      while (ul && ul.tagName !== 'UL') ul = ul.nextElementSibling;
-      if (!ul) return console.warn('Actions UL not found');
 
-      const availabilityLi = Array.from(ul.children)
-        .find(li => li.textContent.trim().startsWith('Availability'));
-      if (!availabilityLi) return console.warn('Availability item not found');
 
-      const newLi = availabilityLi.cloneNode(false);
-      const origIcon = availabilityLi.querySelector('i');
-      if (origIcon) newLi.appendChild(origIcon.cloneNode(false));
-      newLi.appendChild(document.createTextNode(' Shortages List'));
 
-      newLi.style.cursor = 'pointer';
-      newLi.title = 'Click to check shortages';
-      newLi.addEventListener('click', fetchShortagesAndDisplay);
-      newLi.addEventListener('mouseover', () => newLi.style.backgroundColor = '#f0f0f0');
-      newLi.addEventListener('mouseout',  () => newLi.style.backgroundColor = '');
 
-      ul.insertBefore(newLi, availabilityLi);
-      console.log('✅ “Shortages List” button injected successfully.');
-    })();
-  }
 
-  if (enableSuppliers) {
-    // inject Suppliers module
 
-// SUPLLIERS TAB
-(async () => {
-  const isCostings = window.location.search.includes('view=c');
-  const params     = new URLSearchParams(window.location.search);
-  const supplierIn = params.get('supplier');
-  const basePath   = window.location.pathname.split('?')[0];
-  const baseUrl    = `${window.location.origin}${basePath}`;
-
-  // ── Helper: click “Mark as sent” via hidden iframe, removing data-confirm ──
-  function markPOAsSent(poId) {
-    const search = window.location.search; // preserve ?rp=… etc
-    const src    = `${window.location.origin}/purchase_orders/${poId}${search}`;
-
-    return new Promise((resolve, reject) => {
-      const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1px;height:1px';
-      document.body.appendChild(iframe);
-
-      iframe.onload = () => {
-        try {
-          const win = iframe.contentWindow;
-          const doc = win.document;
-
-          // strip out any data-confirm attributes so Rails UJS won't pop
-          doc.querySelectorAll('[data-confirm]').forEach(el => el.removeAttribute('data-confirm'));
-
-          // now find & click the “mark as sent” link
-          const link = doc.querySelector('a[data-method="post"][href*="/mark_as_sent"]');
-          if (!link) throw new Error('Link not found in PO page');
-          link.click();
-
-          console.log(`✅ PO #${poId} “Mark as sent” clicked.`);
-          cleanup();
-          resolve();
-        } catch (err) {
-          cleanup();
-          reject(err);
-        }
-      };
-
-      iframe.onerror = err => {
-        cleanup();
-        reject(err);
-      };
-
-      function cleanup() {
-        setTimeout(() => iframe.remove(), 200);
-      }
-
-      iframe.src = src;
-    });
-  }
-
-  if (!isCostings) {
-    // 1) Fetch & parse view=c
-    const resp = await fetch(`${baseUrl}?view=c`, { credentials: 'same-origin' });
-    if (!resp.ok) { console.error(`Fetch failed: ${resp.status}`); return; }
-    const html = await resp.text();
-    const doc  = new DOMParser().parseFromString(html, 'text/html');
-
-    // 2) Scrape suppliers → {poText, poHref, badgeClasses}
-    const map = {};
-    doc.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
-      const sup = tr.querySelector('td.optional-01.asset.asset-column')?.textContent.trim();
-      if (!sup ||
-         ['Bulk Stock','Non-Stock Booking','Group Booking','******CLEARSOUND STOCK******',
-          'Dan Ridd','Liam Murphy','Rob Burton','Daniel Gibbs','CA24 BDV PEUGEOT BOXER 3.5T VAN']
-           .includes(sup)
-      ) return;
-
-      const poCell = tr.querySelector('td.optional-04.purchase-order-column');
-      let poText = '', poHref = '', badgeClasses = [];
-      if (poCell) {
-        const badge = poCell.firstElementChild;
-        if (badge) {
-          const a = badge.tagName.toLowerCase() === 'a' ? badge : badge.querySelector('a');
-          if (a) { poText = a.textContent.trim(); poHref = a.href; }
-          badgeClasses = Array.from(badge.classList);
-        }
-      }
-      if (!map[sup]) map[sup] = { poText, poHref, badgeClasses };
-    });
-
-    const suppliers = Object.entries(map);
-    if (!suppliers.length) { console.log('ℹ️ No suppliers to show.'); return; }
-
-    // 3) Ensure “Suppliers” panel exists (after Scheduling)
-    let supDiv = [...document.querySelectorAll('.group-side-content')].find(d =>
-      d.querySelector('h3')?.textContent.trim() === 'Suppliers'
-    );
-    if (!supDiv) {
-      const sched = [...document.querySelectorAll('.group-side-content')].find(d =>
-        d.querySelector('h3')?.textContent.trim() === 'Scheduling'
-      );
-      if (!sched) { console.error('Cannot find Scheduling section'); return; }
-      supDiv = document.createElement('div');
-      supDiv.className = 'group-side-content';
-      supDiv.innerHTML = '<h3>Suppliers</h3>';
-      sched.parentNode.insertBefore(supDiv, sched.nextSibling);
-    }
-
-    // 4) Render list with your colour logic
-    supDiv.querySelector('ul.subhire-list')?.remove();
-    const ul = document.createElement('ul');
-    ul.className = 'subhire-list';
-    ul.style.paddingLeft = '1em';
-
-    suppliers.forEach(([sup, {poText, poHref, badgeClasses}]) => {
-      const li = document.createElement('li');
-      li.textContent = sup + ' — ';
-
-      const a = document.createElement('a');
-      Object.assign(a.style, {
-        padding:        '2px 6px',
-        borderRadius:   '4px',
-        fontSize:       '0.9em',
-        fontWeight:     'bold',
-        marginLeft:     '4px',
-        display:        'inline-block',
-        color:          'white',
-        textDecoration: 'none',
-        cursor:         poText ? 'pointer' : 'default'
-      });
-      a.target = '_blank';
-
-      if (poText) {
-        a.textContent = `PO #${poText}`;
-        a.href        = poHref;
-        // original green → orange; else (blue/black) → green
-        const origIsGreen = badgeClasses.some(c => /success|green/i.test(c));
-        a.style.backgroundColor = origIsGreen ? 'orange' : 'green';
-      } else {
-        a.textContent = 'No PO';
-        a.href        = `${baseUrl}?sort=stock_category&view=c&supplier=${encodeURIComponent(sup)}`;
-        a.style.backgroundColor = 'red';
-      }
-
-      li.appendChild(a);
-      ul.appendChild(li);
-    });
-
-    supDiv.appendChild(ul);
-    console.log(`✅ Injected ${suppliers.length} suppliers with updated PO colours.`);
-
-    // ── Right‐click handler to show “Mark as sent” popup ────────────────────
-    document.body.addEventListener('contextmenu', ev => {
-      const link = ev.target.closest('.subhire-list a[href*="/purchase_orders/"]');
-      if (!link || link.textContent.startsWith('No PO')) return;
-      ev.preventDefault();
-
-      // remove old popups
-      document.querySelectorAll('.__po-sent-popup').forEach(x => x.remove());
-
-      // create popup over mouse
-      const box = document.createElement('div');
-      box.className = '__po-sent-popup';
-      box.textContent = 'Mark as sent';
-      Object.assign(box.style, {
-        position:     'absolute',
-        top:          `${ev.pageY}px`,
-        left:         `${ev.pageX}px`,
-        padding:      '6px 12px',
-        background:   '#333',
-        color:        'white',
-        borderRadius: '4px',
-        cursor:       'pointer',
-        zIndex:       9999,
-        fontSize:     '0.9em'
-      });
-      document.body.appendChild(box);
-
-      // cleanup on next click/scroll
-      const cleanup = () => box.remove();
-      setTimeout(() => {
-        document.addEventListener('click', cleanup, { once: true });
-        window.addEventListener('scroll', cleanup, { once: true });
-      }, 10);
-
-      // when clicked, fire the iframe helper
-      box.addEventListener('click', () => {
-        cleanup();
-        const m = link.href.match(/\/purchase_orders\/(\d+)/);
-        if (!m) return console.error('❌ Could not parse PO ID');
-        const poId = m[1];
-        link.style.opacity = '0.6';
-        markPOAsSent(poId)
-          .then(() => link.style.backgroundColor = 'green')
-          .catch(err => console.error(`❌ PO #${poId} failed:`, err))
-          .finally(() => link.style.opacity = '');
-      });
-    });
-
-  } else {
-    // Auto‐select on costings page
-    let count = 0;
-    document.querySelectorAll('table.table-hover tbody tr').forEach(tr => {
-      const name = tr.querySelector('td.optional-01.asset.asset-column')?.textContent.trim();
-      if (name === supplierIn) {
-        const cb = tr.querySelector('input[type="checkbox"]');
-        if (cb && !cb.checked) { cb.click(); count++; }
-      }
-    });
-    console.log(`✔️ Auto‐selected ${count} row${count===1?'':'s'} for “${supplierIn}.”`);
-  }
-})();
 
 
 
@@ -965,9 +943,16 @@ chrome.storage.sync.get({
 
   }
 
-});
+);
 
 
+
+
+
+
+//
+// ── Optional Accessories Module  ─────────────────────────────────────────────────
+//
 
 chrome.storage.sync.get({
   enableOptionalAccessories: true
@@ -1164,6 +1149,10 @@ pollingFallback();
 
 
 
+
+
+
+
 // ── Volume Module ──────────────────────────────────────────────────────────────
 function runVolumeModule(settings) {
   (async function listVolumesWithCache() {
@@ -1175,22 +1164,42 @@ function runVolumeModule(settings) {
     const m = location.pathname.match(/opportunities\/(\d+)/);
     if (!m) return console.error('Couldn’t parse opportunity ID');
     const oppId = m[1];
+    const storageKey = `volume_total_${oppId}`;
 
-    // 2) Insert “Total Volume” row if not present
-    const weightLi = document.getElementById('weight_total')?.closest('li');
-    if (weightLi && !document.getElementById('volume_total')) {
-      const labelW = getComputedStyle(weightLi.querySelector('span:not([id])')).width;
+    // ---- Inject "Total Volume" Row (with cached value if available) ----
+    function injectTotalVolumeRow() {
+      const weightLi = document.getElementById('weight_total')?.closest('li');
+      if (!weightLi) return;
+
+      if (document.getElementById('volume_total')) return; // Already exists
+
+      const labelSpan = weightLi.querySelector('span:not([id])');
+      const labelW = getComputedStyle(labelSpan).width;
+
       const li = document.createElement('li');
+      li.classList.add('volume-injected');
       li.innerHTML = `
         <span class="detail-label" style="display:inline-block;width:${labelW};">
           Total Volume:
         </span>
-        <span id="volume_total">… m³</span>
+        <span id="volume_total">${sessionStorage.getItem(storageKey) || '…'} m³</span>
       `;
       weightLi.after(li);
+      console.log('✅ “Total Volume” row injected');
     }
 
-    // 3) Build or load productVolumeMap
+    // Initial inject
+    injectTotalVolumeRow();
+
+    // Observer to re-inject only if missing
+    const observer = new MutationObserver(() => {
+      if (!document.getElementById('volume_total')) {
+        injectTotalVolumeRow();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // 2) Build or load productVolumeMap
     let productVolumeMap = window.productVolumeMap;
     if (!productVolumeMap) {
       const saved = localStorage.getItem('productVolumeMap');
@@ -1225,7 +1234,7 @@ function runVolumeModule(settings) {
       console.log('✅ Built and cached productVolumeMap for', Object.keys(productVolumeMap).length, 'products');
     }
 
-    // 4) Fetch opportunity_items (with nested item)
+    // 3) Fetch opportunity_items (with nested item)
     const itemsUrl = `https://api.current-rms.com/api/v1/opportunities/${oppId}/opportunity_items?include%5B%5D=item`;
     let records;
     try {
@@ -1243,7 +1252,7 @@ function runVolumeModule(settings) {
       return console.error('Fetch failed:', err);
     }
 
-    // 5) Calculate and display
+    // 4) Calculate volume
     const tableData = records.map(r => {
       const pid = r.item_id;
       const vol = productVolumeMap[pid] || 0;
@@ -1257,8 +1266,11 @@ function runVolumeModule(settings) {
     console.table(tableData);
 
     const total = tableData.reduce((sum, row) => sum + parseFloat(row.line_volume), 0);
-    document.getElementById('volume_total').textContent = total.toFixed(2) + ' m³';
+    const volumeSpan = document.getElementById('volume_total');
+    if (volumeSpan) volumeSpan.textContent = total.toFixed(2) + ' m³';
+    sessionStorage.setItem(storageKey, total.toFixed(2));
     console.log(`🔢 Total Volume = ${total.toFixed(2)} m³`);
+
   })();
 }
 
@@ -1284,129 +1296,263 @@ chrome.storage.sync.get({
 
 
 
-// Delay execution to allow page to load
-setTimeout(function() {
-  // === Custom Message Box Plugin (Manual Only) ===
 
-  // Utility: subtle click sound
+/* === Custom Message Box Plugin (Manual Button + Auto-Popup + Auto-Resizing) === */
+
+chrome.storage.sync.get({ enableMessageBox: true }, ({ enableMessageBox }) => {
+  if (!enableMessageBox) return;
+
+/* === Custom Message Box Plugin (Manual Button + Auto-Popup + Auto-Resizing + Dynamic Button + Silent Close) === */
+
+(async function initMessageBox() {
+  // ---- Configuration & Utilities ----
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
   function playSubtleClick() {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator(), gain = ctx.createGain();
-    osc.type = 'sine'; osc.frequency.setValueAtTime(300, ctx.currentTime);
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime + 0.03);
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.03);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.03);
   }
 
-  // Utility: extract opportunity ID from URL
   function extractOpportunityId(url) {
-    const m = url.match(/\/opportunities\/(\d+)/);
+    const m = url.match(/\/opportunities\/([^\/\?#]+)/);
     return m ? m[1] : null;
   }
 
-  // Fetch the edit form HTML and extract the textarea description value
-  function fetchDescription(id) {
-    return fetch(`/opportunities/${id}/edit`, { credentials: 'same-origin' })
-      .then(res => res.ok ? res.text() : Promise.reject(res.status))
-      .then(html => {
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const ta = doc.querySelector('textarea#opportunity_description');
-        return ta ? ta.value : '';
-      });
+  async function fetchDescription(id) {
+    const res = await fetch(`/opportunities/${id}/edit`, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error(`Fetch edit failed: ${res.status}`);
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return doc.querySelector('textarea#opportunity_description')?.value || '';
   }
 
-  // Show modal with editable textarea and Save/Close, centered styling
-  function showPopup(initialText, id) {
-    const overlay = document.createElement('div');
-    Object.assign(overlay.style, {
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 9998
+  async function patchDescription(id, desc) {
+    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+    await fetch(`/opportunities/${id}.json`, {
+      method: 'PATCH', credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrf,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ opportunity: { description: desc } })
     });
-    document.body.appendChild(overlay);
+  }
+
+  // ---- Popup Delay Logic ----
+  function shouldShowPopup(opId) {
+    const lastId = localStorage.getItem('lastOpportunityId');
+    const lastTime = parseInt(localStorage.getItem('lastPopupTime'), 10);
+    const now = Date.now();
+    if (lastId !== opId || !lastTime || now - lastTime > 3600000) {
+      localStorage.setItem('lastOpportunityId', opId);
+      localStorage.setItem('lastPopupTime', now);
+      return true;
+    }
+    return false;
+  }
+
+  // ---- Auto-Popup on Load (only if non-empty) ----
+  async function handleOpportunityPopup() {
+    const id = extractOpportunityId(location.href);
+    if (!id || !shouldShowPopup(id)) return;
+    try {
+      const messageText = (await fetchDescription(id)).trim();
+      if (!messageText) return;
+      setTimeout(() => {
+        playSubtleClick();
+        showPopup(messageText, id);
+      }, 500);
+    } catch (e) {
+      console.error('[MB] could not fetch initial description:', e);
+    }
+  }
+
+  // ---- Modal & Styles ----
+  function injectStyles() {
+    if (document.getElementById('mb-plugin-styles')) return;
+    const css = `
+      .mb-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.3); z-index:9998; }
+      .mb-modal { position: fixed; top:50%; left:50%; transform: translate(-50%,-50%); background: #fff; border:2px solid #333; padding:20px; width:90%; max-width:600px; box-shadow:0 4px 10px rgba(0,0,0,0.2); border-radius:6px; font-family:Arial,sans-serif; display:flex; flex-direction:column; z-index:9999; text-align:center; }
+      .mb-modal h2 { margin:0 0 10px; }
+      .mb-modal textarea {
+        width:100%;
+        height:auto;
+        min-height: 300px;
+        max-height: 800px;
+        font-size:14px;
+        padding:8px;
+        box-sizing:border-box;
+        border:1px solid #ccc;
+        border-radius:6px;
+        resize:none;
+        overflow:auto;
+        margin-bottom:10px;
+        text-align: left;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+      }
+      .mb-modal textarea::placeholder { color:#888; }
+      .mb-btn { padding:6px 20px; border:none; border-radius:6px; cursor:pointer; background:#4CAF50; color:#fff; font-size:14px; align-self:center; }
+      .mb-btn:hover {
+        background-color: #45a049;
+      }
+    `;
+    const style = document.createElement('style');
+    style.id = 'mb-plugin-styles';
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+
+  function showPopup(text, id) {
+    injectStyles();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'mb-overlay';
 
     const modal = document.createElement('div');
-    Object.assign(modal.style, {
-      position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-      backgroundColor: '#fff', border: '2px solid #333', padding: '20px', width: '420px',
-      boxShadow: '0 4px 10px rgba(0,0,0,0.2)', borderRadius: '6px', zIndex: 9999,
-      fontFamily: 'Arial, sans-serif', textAlign: 'center'
-    });
+    modal.className = 'mb-modal';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    modal.setAttribute('aria-labelledby','mb-title');
+
+    document.body.appendChild(overlay);
     document.body.appendChild(modal);
 
     const h2 = document.createElement('h2');
+    h2.id = 'mb-title';
     h2.textContent = 'Message Box';
-    Object.assign(h2.style, {
-      margin: '0 0 10px', fontSize: '20px', color: '#333',
-      borderBottom: '1px solid #ddd', paddingBottom: '8px', textAlign: 'center'
-    });
     modal.appendChild(h2);
 
-    const textarea = document.createElement('textarea');
-    textarea.value = initialText;
-    Object.assign(textarea.style, {
-      width: '100%', height: '150px', fontSize: '14px', padding: '8px', boxSizing: 'border-box',
-      border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical', margin: '0 auto', display: 'block'
-    });
-    modal.appendChild(textarea);
+    // Add horizontal rule after heading
+    const hr = document.createElement('hr');
+    hr.style.margin = '10px 0';
+    hr.style.border = 'none';
+    hr.style.borderTop = '1px solid #ccc';
+    modal.appendChild(hr);
 
-    const btnRow = document.createElement('div');
-    Object.assign(btnRow.style, { marginTop: '10px', textAlign: 'center' });
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.placeholder = 'Enter your message reminders here…';
+    modal.appendChild(ta);
+    autoResize(ta);
 
-    const saveBtn = document.createElement('button');
-    saveBtn.textContent = 'Save';
-    Object.assign(saveBtn.style, {
-      margin: '0 8px', padding: '6px 12px', backgroundColor: '#4CAF50', color: '#fff',
-      border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'inline-block'
+    const btn = document.createElement('button');
+    btn.className = 'mb-btn';
+    let original = text;
+    btn.textContent = 'Done';
+    btn.title = 'Save changes and close';
+    modal.appendChild(btn);
+
+    ta.addEventListener('input', () => {
+      autoResize(ta);
+      btn.textContent = (ta.value.trim() === original.trim()) ? 'Done' : 'Save';
     });
-    saveBtn.onclick = () => {
-      const desc = textarea.value;
-      overlay.remove(); modal.remove();
-      const csrf = document.querySelector('meta[name="csrf-token"]').content;
-      fetch(`/opportunities/${id}`, {
-        method: 'PATCH', credentials: 'same-origin',
-        headers: {'Content-Type': 'application/json','X-CSRF-Token': csrf},
-        body: JSON.stringify({ opportunity: { description: desc } })
-      });
+
+    ta.focus();
+    function handleKey(e) {
+      if (e.key === 'Escape') cleanup();
+      if (e.key === 'Tab') { e.preventDefault(); btn.focus(); }
+    }
+    document.addEventListener('keydown', handleKey);
+
+    function cleanup() {
+      document.removeEventListener('keydown', handleKey);
+      overlay.remove();
+      modal.remove();
+    }
+
+    btn.onclick = async () => {
+      if (btn.textContent === 'Save') {
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          await patchDescription(id, ta.value);
+        } catch (e) {
+          console.warn('[MB] patch error', e);
+        }
+        cleanup();
+        location.reload();
+      } else {
+        cleanup();
+      }
     };
-    btnRow.appendChild(saveBtn);
-
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = 'Close';
-    Object.assign(closeBtn.style, {
-      margin: '0 8px', padding: '6px 12px', backgroundColor: '#f44336', color: '#fff',
-      border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'inline-block'
-    });
-    closeBtn.onclick = () => { overlay.remove(); modal.remove(); };
-    btnRow.appendChild(closeBtn);
-
-    modal.appendChild(btnRow);
   }
 
-  // Manual button in Actions list only
-  (function waitForActions() {
-    const hdr = Array.from(document.querySelectorAll('.group-side-content h3'))
-      .find(h3 => h3.textContent.trim() === 'Actions');
-    if (!hdr) return setTimeout(waitForActions, 300);
+// ---- Resilient Message Box injection ----
+function injectMessageBoxButton() {
+  const hdr = Array.from(document.querySelectorAll('.group-side-content h3'))
+    .find(h3 => h3.textContent.trim() === 'Actions');
+  if (!hdr) return;
 
-    let ul = hdr.nextElementSibling;
-    while (ul && ul.tagName !== 'UL') ul = ul.nextElementSibling;
-    if (!ul) return;
+  let ul = hdr.nextElementSibling;
+  while (ul && ul.tagName !== 'UL') ul = ul.nextElementSibling;
+  if (!ul) return;
 
-    const orig = Array.from(ul.children)
-      .find(li => li.textContent.trim().startsWith('Shortages List'));
-    if (!orig) return;
+  // avoid double-inject
+  if (ul.querySelector('.mb-injected')) return;
 
-    const li = orig.cloneNode(false);
-    const icon = orig.querySelector('i'); if (icon) li.appendChild(icon.cloneNode(false));
-    li.appendChild(document.createTextNode(' Message Box'));
-    li.style.cursor = 'pointer';
-    li.onclick = () => {
-      playSubtleClick();
+  // find the anchor item
+  let orig = Array.from(ul.children)
+    .find(li => li.textContent.trim().startsWith('Shortages List'));
+  if (!orig) {
+    orig = Array.from(ul.children)
+      .find(li => li.textContent.trim().startsWith('Availability'));
+  }
+  if (!orig) return;
+
+  // clone and insert
+  const li = orig.cloneNode(false);
+  li.classList.add('mb-injected');
+  const ic = orig.querySelector('i');
+  if (ic) li.appendChild(ic.cloneNode(false));
+  li.appendChild(document.createTextNode(' Message Box'));
+  li.style.cursor = 'pointer';
+  li.title = 'Open Message Box';
+
+  // **Actual** popup logic:
+  li.addEventListener('click', async () => {
+    try {
+      playSubtleClick();  // your subtle click sound
       const id = extractOpportunityId(window.location.href);
-      fetchDescription(id).then(text => showPopup(text, id));
-    };
+      if (!id) throw new Error('No opportunity ID in URL');
+      const text = await fetchDescription(id);
+      showPopup(text, id);
+    } catch (err) {
+      console.error('[MB] popup error:', err);
+    }
+  });
 
-    ul.insertBefore(li, orig);
-  })();
-}, 500); // End delayed init
+  ul.insertBefore(li, orig);
+}
+
+// initial injection
+injectMessageBoxButton();
+
+// watch for DOM changes and re-inject if needed
+new MutationObserver(injectMessageBoxButton)
+  .observe(document.body, { childList: true, subtree: true });
+
+
+
+  // ---- Auto-Popup on Load ----
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(handleOpportunityPopup, 300));
+  } else {
+    setTimeout(handleOpportunityPopup, 300);
+  }
+})();
+
+});
