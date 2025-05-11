@@ -29,22 +29,29 @@ _Most of these are already active internally — just need adapting for open rel
 
 ---
 
-## Installation
+## 🚀 Installation
 
-1. Download the plugin ZIP from releases and unzip.  
-2. In Chrome, go to `chrome://extensions`.  
-3. Enable **Developer mode**.  
-4. Click **Load unpacked** and select the plugin folder.  
+1. Download the plugin ZIP from the [Releases](https://github.com/your-repo/releases) page and unzip it.
+2. In Chrome, go to `chrome://extensions`.
+3. Enable **Developer mode** using the toggle in the top-right corner.
+4. Click **Load unpacked** and select the unzipped plugin folder.
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
-1. Click the extension icon (puzzle piece) and open RMS-Navigator.  
-2. Click ⚙️ and enter your:  
-   - **Subdomain** (`yourcompany.currentrms.com`)  
-   - **API Key**  
-3. Click **Save**.  
+1. Click the extension icon (🧩 puzzle piece) in Chrome’s toolbar and open **RMS Navigator**.
+2. In the popup window, enter:
+   - **Subdomain** – e.g. `yourcompany` (used in `yourcompany.current-rms.com`)
+   - **API Key** – your Current RMS API key
+3. Click **Save**.
+
+> 🔐 **Security Note**:  
+> Your API key is stored locally in Chrome using `chrome.storage.sync`.  
+> It **never leaves your browser**, is not transmitted externally, and is only used to make requests directly to the Current RMS API from your own browser session.
+> > 🔐 **Keep Your API Key Safe**  
+> Your API key gives access to your Current RMS account, so treat it like a password.  
+> Don’t share it publicly or commit it to any version control (like GitHub).
 
 ---
 
