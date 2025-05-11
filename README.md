@@ -2,22 +2,30 @@
 _A little nudge for CurrentRMS_![Screenshot 2025-05-11 at 21 46 13](https://github.com/user-attachments/assets/43589784-c73a-4727-8a21-6e5ade4208f8)
 
 
-## Current Modules  
-- **Shortages**  
-- **Suppliers**  
-- **Message Box**  
-- **Optional Accessories**
-- **Total Volume** (new feature)
-- **Hide “below-cost” Rows**  
+## ✅ Current Modules
 
-## Future Modules  
-- **Crew Hotels**
-- **Show shortages on text items**
-- **LOLER Inspection**  
-- **Ladder Inspection**  
-- **Sync opportunities up to Google calendar**  
-- **Automated Activities**  
-- **Warehouse Dashboard**  
+These modules are active and ready to use:
+
+- **Shortages** – Quickly view and copy any item shortages, including quarantine alerts.
+- **Suppliers** – Displays linked POs with colour-coded statuses and right-click actions.
+- **Message Box** – Pops up contextual job info when opening an opportunity.
+- **Optional Accessories** – Highlights and reminds you when optional kit is available.
+- **Total Volume** – 🚛 Calculates total cubic volume for opportunity items.
+- **Hide “below-cost” Rows** – Optionally suppress orange-highlighted costing rows.
+
+## 🚧 Future Modules
+
+_Most of these are already active internally — just need adapting for open release:_
+
+- [ ] **Crew Hotels**
+- [ ] **Popup reminders for outstanding Dry Hire returns**
+- [ ] **No Contact popup reminder**
+- [ ] **Show shortages on text items**
+- [ ] **LOLER Inspection**
+- [ ] **Ladder Inspection**
+- [ ] **Sync opportunities with Google Calendar**
+- [ ] **Automated Activities**
+- [ ] **Warehouse Dashboard**
 
 ---
 
