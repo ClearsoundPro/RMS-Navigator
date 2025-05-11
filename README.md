@@ -42,7 +42,8 @@ _A little nudge for CurrentRMS_
 ## Modules Overview
 
 ### Shortages Module
-<img width="579" alt="Screenshot 2025-04-26 at 12 20 33" src="https://github.com/user-attachments/assets/d741cd95-bddf-41fa-9242-d9feb3507ebf" />
+![Screenshot 2025-05-11 at 21 33 21](https://github.com/user-attachments/assets/04693c13-9a60-4d03-b25b-50e6b87aa1c0)
+
 
 **Location**: Under **Actions** in the Opportunity sidebar, click the **Shortages List** button.  
 
@@ -79,7 +80,8 @@ _A little nudge for CurrentRMS_
 ---
 
 ### Suppliers Module
-<img width="292" alt="Screenshot 2025-04-26 at 12 16 10" src="https://github.com/user-attachments/assets/1374a5e7-9924-4389-97bf-58877ff4a35f" />
+<img width="292" alt="Screenshot 2025-04-26 at 12 16 10" src="https://github.com/user-attachments/assets/1374a5e7-9924-4389-97bf-58877ff4a35f" />![Screenshot 2025-05-11 at 21 36 23](https://github.com/user-attachments/assets/64112125-6d2f-4b56-9895-6961a32b45bc)
+
 
 **Location**: On the right-hand side of an Opportunity page, under the **Suppliers** heading.  
 
